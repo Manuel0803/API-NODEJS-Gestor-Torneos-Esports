@@ -109,7 +109,7 @@ export class Partido {
   }
 
   registrarReporte({ equipoId, resultado, evidenciaUrl = null }) {
-    if (this.estado !== ESTADOS_PARTIDO.EN_JUEGO && this.estado !== ESTADOS_PARTIDO.EN_DISPUTA) {
+    if (this.estado !== ESTADOS_PARTIDO.EN_JUEGO) {
       throw new PartidoNoModificableError(this.id, this.estado, 'registrarReporte');
     }
 
@@ -217,7 +217,7 @@ export class Partido {
     };
   }
 
-  anularPorArbitro({ arbitroId, motivo }) {
+  anularPorArbitro({ arbitroId, motivo, reabrir = false }) {
     if (this.estado !== ESTADOS_PARTIDO.CONFIRMADO && this.estado !== ESTADOS_PARTIDO.EN_DISPUTA) {
       throw new PartidoNoModificableError(this.id, this.estado, 'anularPorArbitro');
     }
@@ -227,29 +227,86 @@ export class Partido {
     }
 
     const ganadorPrevio = this.ganadorId;
-    this.estado = ESTADOS_PARTIDO.ANULADO;
-    this.ganadorId = null;
+    const estadoAnterior = {
+      estado: this.estado,
+      ganadorId: this.ganadorId,
+      reporteEquipoA: this.reporteEquipoA,
+      reporteEquipoB: this.reporteEquipoB,
+      evidenciaAUrl: this.evidenciaAUrl,
+      evidenciaBUrl: this.evidenciaBUrl
+    };
+
+    if (reabrir) {
+      this.estado = ESTADOS_PARTIDO.EN_JUEGO;
+      this.reporteEquipoA = null;
+      this.reporteEquipoB = null;
+      this.evidenciaAUrl = null;
+      this.evidenciaBUrl = null;
+      this.ganadorId = null;
+    } else {
+      this.estado = ESTADOS_PARTIDO.ANULADO;
+      this.ganadorId = null;
+    }
 
     return {
       partidoId: this.id,
       arbitroId,
       motivo,
       ganadorPrevio,
+      estadoAnterior,
+      reabierto: Boolean(reabrir),
       siguientePartidoId: this.siguientePartidoId,
       slotSiguiente: this.slotSiguiente
+    };
+  }
+
+  reabrirParaRejugar({ arbitroId = null, motivo = 'Reapertura arbitral para volver a disputar el partido' } = {}) {
+    if (this.estado !== ESTADOS_PARTIDO.ANULADO && this.estado !== ESTADOS_PARTIDO.EN_DISPUTA) {
+      throw new PartidoNoModificableError(this.id, this.estado, 'reabrirParaRejugar');
+    }
+
+    if (!this.equipoAId || !this.equipoBId) {
+      throw new ReglaDeNegocioError('No se puede reabrir un partido sin ambos equipos asignados');
+    }
+
+    const estadoAnterior = {
+      estado: this.estado,
+      ganadorId: this.ganadorId,
+      reporteEquipoA: this.reporteEquipoA,
+      reporteEquipoB: this.reporteEquipoB,
+      evidenciaAUrl: this.evidenciaAUrl,
+      evidenciaBUrl: this.evidenciaBUrl
+    };
+
+    this.reporteEquipoA = null;
+    this.reporteEquipoB = null;
+    this.evidenciaAUrl = null;
+    this.evidenciaBUrl = null;
+    this.ganadorId = null;
+    this.estado = ESTADOS_PARTIDO.EN_JUEGO;
+
+    return {
+      partidoId: this.id,
+      arbitroId,
+      motivo,
+      estadoAnterior,
+      estado: this.estado
     };
   }
 
   revertirSlot(slot) {
     if (slot === 'A') {
       this.equipoAId = null;
-      this.reporteEquipoA = null;
-      this.evidenciaAUrl = null;
     } else if (slot === 'B') {
       this.equipoBId = null;
-      this.reporteEquipoB = null;
-      this.evidenciaBUrl = null;
+    } else {
+      throw new ReglaDeNegocioError(`Slot inválido: ${slot}`);
     }
+
+    this.reporteEquipoA = null;
+    this.reporteEquipoB = null;
+    this.evidenciaAUrl = null;
+    this.evidenciaBUrl = null;
 
     const estabaConfirmado = this.estado === ESTADOS_PARTIDO.CONFIRMADO;
     const ganadorPrevio = this.ganadorId;

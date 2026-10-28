@@ -96,6 +96,14 @@ describe('Entidad de Dominio: Partido', () => {
         ReporteInvalidoError
       );
     });
+    it('rechaza reportes de capitanes si el partido está en EN_DISPUTA (exclusividad arbitral)', () => {
+      const partido = new Partido({ ...partidoBase, estado: ESTADOS_PARTIDO.EN_DISPUTA });
+
+      assert.throws(
+        () => partido.registrarReporte({ equipoId: 'equipo-a', resultado: RESULTADOS_REPORTE.GANA_A }),
+        PartidoNoModificableError
+      );
+    });
   });
 
   describe('Resolución arbitral de disputas', () => {
@@ -135,6 +143,8 @@ describe('Entidad de Dominio: Partido', () => {
         ...partidoBase,
         estado: ESTADOS_PARTIDO.CONFIRMADO,
         ganadorId: 'equipo-a',
+        reporteEquipoA: RESULTADOS_REPORTE.GANA_A,
+        reporteEquipoB: RESULTADOS_REPORTE.GANA_A,
         siguientePartidoId: 'partido-r2-1',
         slotSiguiente: 'A'
       });
@@ -147,20 +157,66 @@ describe('Entidad de Dominio: Partido', () => {
       assert.equal(partido.estado, ESTADOS_PARTIDO.ANULADO);
       assert.equal(partido.ganadorId, null);
       assert.equal(res.ganadorPrevio, 'equipo-a');
+      assert.equal(res.estadoAnterior.ganadorId, 'equipo-a');
+      assert.equal(res.estadoAnterior.estado, ESTADOS_PARTIDO.CONFIRMADO);
       assert.equal(res.siguientePartidoId, 'partido-r2-1');
       assert.equal(res.slotSiguiente, 'A');
     });
 
-    it('revertirSlot limpia el equipo del slot y resetea el partido a PENDIENTE', () => {
+    it('permite anular y reabrir directamente para volver a disputarse', () => {
       const partido = new Partido({
         ...partidoBase,
-        estado: ESTADOS_PARTIDO.EN_JUEGO
+        estado: ESTADOS_PARTIDO.CONFIRMADO,
+        ganadorId: 'equipo-a',
+        reporteEquipoA: RESULTADOS_REPORTE.GANA_A,
+        reporteEquipoB: RESULTADOS_REPORTE.GANA_A
+      });
+
+      const res = partido.anularPorArbitro({
+        arbitroId: 'arbitro-1',
+        motivo: 'Fallo técnico de servidor, se debe repetir',
+        reabrir: true
+      });
+
+      assert.equal(partido.estado, ESTADOS_PARTIDO.EN_JUEGO);
+      assert.equal(partido.ganadorId, null);
+      assert.equal(partido.reporteEquipoA, null);
+      assert.equal(partido.reporteEquipoB, null);
+      assert.equal(res.reabierto, true);
+      assert.equal(res.estadoAnterior.ganadorId, 'equipo-a');
+    });
+
+    it('permite reabrir para rejugar un partido que estaba en ANULADO', () => {
+      const partido = new Partido({
+        ...partidoBase,
+        estado: ESTADOS_PARTIDO.ANULADO
+      });
+
+      const res = partido.reabrirParaRejugar({
+        arbitroId: 'arbitro-1',
+        motivo: 'Se reabre tras apelación'
+      });
+
+      assert.equal(partido.estado, ESTADOS_PARTIDO.EN_JUEGO);
+      assert.equal(partido.ganadorId, null);
+      assert.equal(res.estadoAnterior.estado, ESTADOS_PARTIDO.ANULADO);
+    });
+
+    it('revertirSlot limpia el equipo del slot, resetea a PENDIENTE y borra reportes de ambos slots', () => {
+      const partido = new Partido({
+        ...partidoBase,
+        estado: ESTADOS_PARTIDO.EN_JUEGO,
+        reporteEquipoB: RESULTADOS_REPORTE.GANA_B,
+        evidenciaBUrl: 'https://evidencia.com/b.png'
       });
 
       const res = partido.revertirSlot('A');
 
       assert.equal(partido.equipoAId, null);
       assert.equal(partido.equipoBId, 'equipo-b');
+      assert.equal(partido.reporteEquipoA, null);
+      assert.equal(partido.reporteEquipoB, null);
+      assert.equal(partido.evidenciaBUrl, null);
       assert.equal(partido.estado, ESTADOS_PARTIDO.PENDIENTE);
       assert.equal(res.debeRevertirSiguientes, false);
     });
