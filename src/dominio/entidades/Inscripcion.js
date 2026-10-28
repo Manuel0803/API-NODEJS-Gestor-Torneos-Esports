@@ -20,13 +20,30 @@ export class Inscripcion {
       throw new ReglaDeNegocioError('id, torneoId, equipoId y ordenInscripcion son obligatorios');
     }
 
+    if (!Object.values(ESTADOS_INSCRIPCION).includes(estado)) {
+      throw new ReglaDeNegocioError(`Estado de inscripción inválido: ${estado}`);
+    }
+
+    if (!Number.isInteger(Number(ordenInscripcion)) || ordenInscripcion < 1) {
+      throw new ReglaDeNegocioError('El orden de inscripción debe ser un entero positivo');
+    }
+
+    if (estado === ESTADOS_INSCRIPCION.ELIMINADO_WO && checkinConfirmado) {
+      throw new ReglaDeNegocioError('Un equipo eliminado por W.O. no puede tener el check-in confirmado');
+    }
+
+    const jugadores = Array.isArray(jugadoresIds) ? [...jugadoresIds] : [];
+    if (new Set(jugadores).size !== jugadores.length) {
+      throw new ReglaDeNegocioError('La nómina del equipo contiene jugadores repetidos');
+    }
+
     this.id = id;
     this.torneoId = torneoId;
     this.equipoId = equipoId;
     this.checkinConfirmado = Boolean(checkinConfirmado);
     this.estado = estado;
     this.ordenInscripcion = Number(ordenInscripcion);
-    this.jugadoresIds = Array.isArray(jugadoresIds) ? [...jugadoresIds] : [];
+    this.jugadoresIds = jugadores;
     this.creadoEn = creadoEn instanceof Date ? creadoEn : new Date(creadoEn);
   }
 
@@ -38,8 +55,14 @@ export class Inscripcion {
   }
 
   eliminarPorWO() {
+    if (this.checkinConfirmado) {
+      throw new ReglaDeNegocioError('No se puede eliminar por W.O. a un equipo que confirmó su presencia');
+    }
     this.estado = ESTADOS_INSCRIPCION.ELIMINADO_WO;
-    this.checkinConfirmado = false;
+  }
+
+  participaDelSorteo() {
+    return this.estado === ESTADOS_INSCRIPCION.CONFIRMADA && this.checkinConfirmado;
   }
 
   contieneJugador(jugadorId) {

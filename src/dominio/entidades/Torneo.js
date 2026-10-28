@@ -17,26 +17,42 @@ export const FORMATOS_TORNEO = Object.freeze({
   ELIMINACION_SIMPLE: 'ELIMINACION_SIMPLE'
 });
 
-function crearPrng(semilla) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < semilla.length; i++) {
-    h = Math.imul(h ^ semilla.charCodeAt(i), 16777619) >>> 0;
+function hashFnv1a(texto) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i++) {
+    hash = Math.imul(hash ^ texto.charCodeAt(i), 0x01000193) >>> 0;
   }
+  return hash;
+}
+
+function crearMulberry32(semilla) {
+  let estado = hashFnv1a(semilla);
   return function () {
-    h = Math.imul(h ^ (h >>> 15), 1 | h) >>> 0;
-    h = (h + Math.imul(h ^ (h >>> 7), 61 | h)) ^ h;
-    return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
+    estado = (estado + 0x6d2b79f5) >>> 0;
+    let t = estado;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
 function barajarConSemilla(elementos, semilla) {
   const copia = [...elementos];
-  const rand = crearPrng(semilla);
+  const aleatorio = crearMulberry32(semilla);
   for (let i = copia.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
+    const j = Math.floor(aleatorio() * (i + 1));
     [copia[i], copia[j]] = [copia[j], copia[i]];
   }
   return copia;
+}
+
+function ordenDeSiembra(cantidadPosiciones) {
+  let orden = [1];
+  while (orden.length < cantidadPosiciones) {
+    const suma = orden.length * 2 + 1;
+    orden = orden.flatMap(siembra => [siembra, suma - siembra]);
+  }
+  return orden;
 }
 
 export class Torneo {
@@ -48,7 +64,7 @@ export class Torneo {
     cupoMaximo,
     inscriptosActuales = 0,
     tamanoEquipo = 1,
-    semillaSorteo = 'seed-default',
+    semillaSorteo,
     fechaCierreInscripcion,
     inicioCheckin,
     finCheckin,
@@ -58,12 +74,28 @@ export class Torneo {
       throw new ReglaDeNegocioError('id, nombre, juego y cupoMaximo son obligatorios');
     }
 
-    if (cupoMaximo < 2) {
-      throw new ReglaDeNegocioError('El cupo máximo no puede ser menor a 2');
+    if (typeof semillaSorteo !== 'string' || semillaSorteo.trim().length === 0) {
+      throw new ReglaDeNegocioError('La semilla de sorteo es obligatoria');
+    }
+
+    if (!Object.values(FORMATOS_TORNEO).includes(formato)) {
+      throw new ReglaDeNegocioError(`Formato de torneo no soportado: ${formato}`);
+    }
+
+    if (!Object.values(ESTADOS_TORNEO).includes(estado)) {
+      throw new ReglaDeNegocioError(`Estado de torneo inválido: ${estado}`);
+    }
+
+    if (!Number.isInteger(Number(cupoMaximo)) || cupoMaximo < 2) {
+      throw new ReglaDeNegocioError('El cupo máximo debe ser un entero mayor o igual a 2');
     }
 
     if (tamanoEquipo < 1) {
       throw new ReglaDeNegocioError('El tamaño del equipo debe ser al menos 1');
+    }
+
+    if (inscriptosActuales < 0 || inscriptosActuales > cupoMaximo) {
+      throw new ReglaDeNegocioError('La cantidad de inscriptos debe estar entre 0 y el cupo máximo');
     }
 
     const fechaCierre = new Date(fechaCierreInscripcion);
@@ -72,6 +104,10 @@ export class Torneo {
 
     if (isNaN(fechaCierre.getTime()) || isNaN(fechaInicioCheckin.getTime()) || isNaN(fechaFinCheckin.getTime())) {
       throw new ReglaDeNegocioError('Fechas de inscripción o check-in inválidas');
+    }
+
+    if (fechaCierre > fechaInicioCheckin) {
+      throw new ReglaDeNegocioError('El cierre de inscripción debe ser anterior o igual al inicio del check-in');
     }
 
     if (fechaInicioCheckin > fechaFinCheckin) {
@@ -85,7 +121,7 @@ export class Torneo {
     this.cupoMaximo = Number(cupoMaximo);
     this.inscriptosActuales = Number(inscriptosActuales);
     this.tamanoEquipo = Number(tamanoEquipo);
-    this.semillaSorteo = String(semillaSorteo);
+    this.semillaSorteo = semillaSorteo.trim();
     this.fechaCierreInscripcion = fechaCierre;
     this.inicioCheckin = fechaInicioCheckin;
     this.finCheckin = fechaFinCheckin;
@@ -140,40 +176,48 @@ export class Torneo {
     }
   }
 
-  iniciarTorneo({ fechaActual = new Date(), cantidadInscriptos = null } = {}) {
+  iniciarTorneo({ fechaActual = new Date(), cantidadConfirmados } = {}) {
     if (this.estado !== ESTADOS_TORNEO.ABIERTO) {
-      throw new TorneoCerradoError(`Solo se puede iniciar en estado ABIERTO`);
+      throw new TorneoCerradoError('Solo se puede iniciar en estado ABIERTO');
     }
 
-    if (fechaActual < this.inicioCheckin) {
-      throw new ReglaDeNegocioError('No se puede iniciar el torneo antes de la ventana de check-in');
+    if (!this.checkinHaVencido(fechaActual)) {
+      throw new ReglaDeNegocioError('No se puede iniciar el torneo hasta que cierre la ventana de check-in');
     }
 
-    if (cantidadInscriptos !== null && cantidadInscriptos < 2) {
-      throw new ReglaDeNegocioError(`Se requieren al menos 2 equipos para iniciar el torneo. Hay ${cantidadInscriptos}`);
+    if (!Number.isInteger(cantidadConfirmados) || cantidadConfirmados < 2) {
+      throw new ReglaDeNegocioError(
+        `Se requieren al menos 2 equipos con check-in confirmado. Hay ${cantidadConfirmados ?? 0}`
+      );
     }
 
     this.estado = ESTADOS_TORNEO.EN_CURSO;
   }
 
-  finalizarTorneo({ partidoFinal = null } = {}) {
+  finalizarTorneo({ partidoFinal } = {}) {
     if (this.estado !== ESTADOS_TORNEO.EN_CURSO) {
-      throw new TorneoCerradoError(`Solo se puede finalizar en estado EN_CURSO`);
+      throw new TorneoCerradoError('Solo se puede finalizar en estado EN_CURSO');
     }
 
-    if (partidoFinal) {
-      if (partidoFinal.estado !== ESTADOS_PARTIDO.CONFIRMADO || !partidoFinal.ganadorId) {
-        throw new ReglaDeNegocioError('El partido final debe estar confirmado con un ganador');
-      }
+    if (!partidoFinal || partidoFinal.siguientePartidoId) {
+      throw new ReglaDeNegocioError('Se debe indicar el partido final de la llave');
+    }
+
+    if (partidoFinal.estado !== ESTADOS_PARTIDO.CONFIRMADO || !partidoFinal.ganadorId) {
+      throw new ReglaDeNegocioError('El partido final debe estar confirmado con un ganador');
     }
 
     this.estado = ESTADOS_TORNEO.FINALIZADO;
   }
 
-  generarEstructuraLlave(equiposConfirmados) {
+  generarEstructuraLlave(equiposConfirmados, { generarId = randomUUID } = {}) {
     const N = equiposConfirmados.length;
     if (N < 2) {
       throw new ReglaDeNegocioError(`Se requieren al menos 2 equipos confirmados. Hay ${N}`);
+    }
+
+    if (new Set(equiposConfirmados.map(e => e.equipoId)).size !== N) {
+      throw new ReglaDeNegocioError('La lista de equipos confirmados contiene duplicados');
     }
 
     const equiposOrdenados = [...equiposConfirmados].sort(
@@ -187,8 +231,7 @@ export class Torneo {
 
     const cantidadByes = P - N;
     const equiposConBye = equiposOrdenados.slice(0, cantidadByes);
-    const equiposRestantes = equiposOrdenados.slice(cantidadByes);
-    const equiposEmparejados = barajarConSemilla(equiposRestantes, this.semillaSorteo);
+    const equiposEmparejados = barajarConSemilla(equiposOrdenados.slice(cantidadByes), this.semillaSorteo);
 
     const totalRondas = Math.log2(P);
     const rondasPartidos = {};
@@ -198,19 +241,16 @@ export class Torneo {
       rondasPartidos[r] = [];
 
       for (let pos = 1; pos <= cantidadPartidosRonda; pos++) {
-        const partidoId = randomUUID();
         let siguientePartidoId = null;
         let slotSiguiente = null;
 
         if (r < totalRondas) {
-          const posSiguiente = Math.ceil(pos / 2);
-          const partidoSiguiente = rondasPartidos[r + 1].find(p => p.posicionEnRonda === posSiguiente);
-          siguientePartidoId = partidoSiguiente.id;
+          siguientePartidoId = rondasPartidos[r + 1][Math.ceil(pos / 2) - 1].id;
           slotSiguiente = pos % 2 === 1 ? 'A' : 'B';
         }
 
         rondasPartidos[r].push({
-          id: partidoId,
+          id: generarId(),
           torneoId: this.id,
           ronda: r,
           posicionEnRonda: pos,
@@ -231,48 +271,36 @@ export class Torneo {
     }
 
     const partidosRonda1 = rondasPartidos[1];
-
-    for (let b = 0; b < cantidadByes; b++) {
-      const partido = partidosRonda1[b];
-      const equipoConBye = equiposConBye[b];
-
-      partido.equipoAId = equipoConBye.equipoId;
-      partido.equipoBId = null;
-      partido.esBye = true;
-      partido.estado = ESTADOS_PARTIDO.CONFIRMADO;
-      partido.ganadorId = equipoConBye.equipoId;
-
-      if (partido.siguientePartidoId) {
-        const partidoSiguiente = rondasPartidos[2].find(p => p.id === partido.siguientePartidoId);
-        if (partidoSiguiente) {
-          if (partido.slotSiguiente === 'A') {
-            partidoSiguiente.equipoAId = equipoConBye.equipoId;
-          } else {
-            partidoSiguiente.equipoBId = equipoConBye.equipoId;
-          }
-
-          if (partidoSiguiente.equipoAId && partidoSiguiente.equipoBId) {
-            partidoSiguiente.estado = ESTADOS_PARTIDO.EN_JUEGO;
-          }
-        }
-      }
-    }
-
+    const siembraPorPosicion = ordenDeSiembra(partidosRonda1.length);
     let indiceEmparejados = 0;
-    for (let p = cantidadByes; p < partidosRonda1.length; p++) {
-      const partido = partidosRonda1[p];
 
-      if (indiceEmparejados < equiposEmparejados.length) {
-        partido.equipoAId = equiposEmparejados[indiceEmparejados++].equipoId;
-      }
-      if (indiceEmparejados < equiposEmparejados.length) {
-        partido.equipoBId = equiposEmparejados[indiceEmparejados++].equipoId;
+    partidosRonda1.forEach((partido, indice) => {
+      const siembra = siembraPorPosicion[indice];
+
+      if (siembra <= cantidadByes) {
+        const equipoId = equiposConBye[siembra - 1].equipoId;
+        partido.equipoAId = equipoId;
+        partido.esBye = true;
+        partido.ganadorId = equipoId;
+        partido.estado = ESTADOS_PARTIDO.CONFIRMADO;
+
+        const partidoSiguiente = rondasPartidos[2][Math.ceil(partido.posicionEnRonda / 2) - 1];
+        if (partido.slotSiguiente === 'A') {
+          partidoSiguiente.equipoAId = equipoId;
+        } else {
+          partidoSiguiente.equipoBId = equipoId;
+        }
+
+        if (partidoSiguiente.equipoAId && partidoSiguiente.equipoBId) {
+          partidoSiguiente.estado = ESTADOS_PARTIDO.EN_JUEGO;
+        }
+        return;
       }
 
-      if (partido.equipoAId && partido.equipoBId) {
-        partido.estado = ESTADOS_PARTIDO.EN_JUEGO;
-      }
-    }
+      partido.equipoAId = equiposEmparejados[indiceEmparejados++].equipoId;
+      partido.equipoBId = equiposEmparejados[indiceEmparejados++].equipoId;
+      partido.estado = ESTADOS_PARTIDO.EN_JUEGO;
+    });
 
     const todosLosPartidos = [];
     for (let r = 1; r <= totalRondas; r++) {

@@ -27,12 +27,20 @@ El árbitro anula el partido pero está obligado a declarar un ganador por W.O. 
 - **Ventajas:** No requiere lógica de reapertura; la llave siempre avanza hacia adelante.
 - **Desventajas:** Impide repetir partidos en casos de fallos técnicos de servidor, empates no previstos o decisiones arbitrales que ordenan jugar de nuevo. Obliga a designar un ganador ficticio o dejar el cuadro incompleto.
 
-### Opción 2: Máquina de estados con reapertura (`reabrirParaRejugar`), auditoría previa y limpieza simétrica de slots (Elegida)
+### Opción 2: Resolución atómica obligatoria (REJUGAR / VICTORIA_ADMINISTRATIVA) sin estado limbo, auditoría y limpieza simétrica (Elegida)
 
-Permitir que un partido anulado capture su `estadoAnterior` (ganador previo, reportes y evidencias para `auditoria_arbitral`), limpie los reportes de ambos equipos y retorne a `EN_JUEGO`. La función `revertirSlot` limpia el equipo asignado y resetea incondicionalmente los reportes de ambos slots en las rondas siguientes.
+En lugar de dejar el partido en un estado intermedio `ANULADO` que obligue a un segundo paso o pueda quedar olvidado en limbo, `Partido.anularPorArbitro` exige en el mismo acto atómico la resolución deportiva (`RESOLUCIONES_ANULACION`):
 
-- **Ventajas:** Resuelve de raíz el deadlock de la llave. Permite tanto la repetición del partido como la descalificación. Elimina por completo los reportes residuales en rondas avanzadas y garantiza trazabilidad inmutable mediante auditoría.
-- **Desventajas:** Requiere soportar la transición `ANULADO -> EN_JUEGO` y coordinar la recursión en la base de datos bajo transacción.
+- `REJUGAR`: Limpia reportes, evidencias y ganador, retornando el partido a `EN_JUEGO`.
+- `VICTORIA_ADMINISTRATIVA`: Asigna al nuevo ganador y coloca el partido en `CONFIRMADO`.
+
+En ambos casos:
+
+- Se captura una instantánea de `estadoAnterior` para la tabla `auditoria_arbitral`.
+- Si el partido ya estaba confirmado, se dispara la cascada hacia adelante (`revertirSlot`), limpiando completamente el slot y los reportes de ambos contendientes para evitar reportes residuales.
+
+- **Ventajas:** Resuelve de raíz el deadlock de la llave. Elimina por completo los estados intermedios inconsistentes. Garantiza que la llave siempre esté en un estado accionable. Elimina reportes fantasma y conserva auditoría inmutable.
+- **Desventajas:** El caso de uso debe coordinar la resolución en una única transacción con reversión en cascada en la base de datos.
 
 ---
 
@@ -40,9 +48,9 @@ Permitir que un partido anulado capture su `estadoAnterior` (ganador previo, rep
 
 Se adopta la **Opción 2**:
 
-1. `Partido.anularPorArbitro` captura el `estadoAnterior` completo y admite la opción `reabrir: true` para regresar a `EN_JUEGO`.
-2. Se implementa `Partido.reabrirParaRejugar()` para destrabar partidos anulados cuando el árbitro autorice la repetición del juego.
-3. `Partido.revertirSlot` resetea incondicionalmente los reportes y evidencias de ambos contrincantes (`reporteEquipoA = null`, `reporteEquipoB = null`, `evidenciaAUrl = null`, `evidenciaBUrl = null`).
+1. Se elimina `ANULADO` como estado del partido; los únicos estados válidos son `PENDIENTE`, `EN_JUEGO`, `EN_DISPUTA` y `CONFIRMADO`.
+2. `Partido.anularPorArbitro` exige el parámetro obligatorio `resolucion` (`REJUGAR` o `VICTORIA_ADMINISTRATIVA`), retornando el dictamen y si debe dispararse la reversión en cascada.
+3. `Partido.revertirSlot` resetea incondicionalmente los reportes y evidencias de ambos contrincantes (`reporteEquipoA = null`, `reporteEquipoB = null`, `evidenciaAUrl = null`, `evidenciaBUrl = null`) y regresa el partido a `PENDIENTE`.
 4. Se bloquea el método `registrarReporte` si el partido está en `EN_DISPUTA`, otorgando exclusividad resolutiva al `ARBITRO`.
 
 ---

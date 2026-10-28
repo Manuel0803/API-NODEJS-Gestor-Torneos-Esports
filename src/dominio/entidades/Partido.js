@@ -8,14 +8,20 @@ export const ESTADOS_PARTIDO = Object.freeze({
   PENDIENTE: 'PENDIENTE',
   EN_JUEGO: 'EN_JUEGO',
   EN_DISPUTA: 'EN_DISPUTA',
-  CONFIRMADO: 'CONFIRMADO',
-  ANULADO: 'ANULADO'
+  CONFIRMADO: 'CONFIRMADO'
 });
 
 export const RESULTADOS_REPORTE = Object.freeze({
   GANA_A: 'GANA_A',
   GANA_B: 'GANA_B'
 });
+
+export const RESOLUCIONES_ANULACION = Object.freeze({
+  REJUGAR: 'REJUGAR',
+  VICTORIA_ADMINISTRATIVA: 'VICTORIA_ADMINISTRATIVA'
+});
+
+const SLOTS = Object.freeze(['A', 'B']);
 
 export class Partido {
   constructor({
@@ -44,6 +50,14 @@ export class Partido {
       throw new ReglaDeNegocioError('Un equipo no puede jugar contra sí mismo');
     }
 
+    if (!Object.values(ESTADOS_PARTIDO).includes(estado)) {
+      throw new ReglaDeNegocioError(`Estado de partido inválido: ${estado}`);
+    }
+
+    if (slotSiguiente !== null && !SLOTS.includes(slotSiguiente)) {
+      throw new ReglaDeNegocioError(`Slot siguiente inválido: ${slotSiguiente}`);
+    }
+
     this.id = id;
     this.torneoId = torneoId;
     this.ronda = ronda;
@@ -63,6 +77,8 @@ export class Partido {
   }
 
   resolverBye() {
+    this.#exigirEstado('resolverBye', ESTADOS_PARTIDO.PENDIENTE);
+
     if (!this.esBye) {
       throw new ReglaDeNegocioError(`El partido ${this.id} no es un Bye`);
     }
@@ -75,59 +91,43 @@ export class Partido {
     this.ganadorId = equipoGanador;
     this.estado = ESTADOS_PARTIDO.CONFIRMADO;
 
-    return {
-      partidoId: this.id,
-      ganadorId: this.ganadorId,
-      avanza: true,
-      siguientePartidoId: this.siguientePartidoId,
-      slotSiguiente: this.slotSiguiente
-    };
+    return this.#datosDeAvance();
   }
 
   asignarEquipo(slot, equipoId) {
-    if (this.estado === ESTADOS_PARTIDO.CONFIRMADO || this.estado === ESTADOS_PARTIDO.ANULADO) {
-      throw new PartidoNoModificableError(this.id, this.estado, 'asignarEquipo');
+    this.#exigirEstado('asignarEquipo', ESTADOS_PARTIDO.PENDIENTE);
+    this.#exigirSlotValido(slot);
+
+    if (this.esBye) {
+      throw new ReglaDeNegocioError('No se pueden asignar equipos a un partido de descanso (Bye)');
+    }
+
+    const rival = slot === 'A' ? this.equipoBId : this.equipoAId;
+    if (rival && rival === equipoId) {
+      throw new ReglaDeNegocioError(`El equipo ya está asignado al slot ${slot === 'A' ? 'B' : 'A'}`);
     }
 
     if (slot === 'A') {
-      if (this.equipoBId && this.equipoBId === equipoId) {
-        throw new ReglaDeNegocioError('El equipo ya está asignado al slot B');
-      }
       this.equipoAId = equipoId;
-    } else if (slot === 'B') {
-      if (this.equipoAId && this.equipoAId === equipoId) {
-        throw new ReglaDeNegocioError('El equipo ya está asignado al slot A');
-      }
-      this.equipoBId = equipoId;
     } else {
-      throw new ReglaDeNegocioError(`Slot inválido: ${slot}`);
+      this.equipoBId = equipoId;
     }
 
-    if (this.equipoAId && this.equipoBId && this.estado === ESTADOS_PARTIDO.PENDIENTE && !this.esBye) {
+    if (this.equipoAId && this.equipoBId) {
       this.estado = ESTADOS_PARTIDO.EN_JUEGO;
     }
   }
 
   registrarReporte({ equipoId, resultado, evidenciaUrl = null }) {
-    if (this.estado !== ESTADOS_PARTIDO.EN_JUEGO) {
-      throw new PartidoNoModificableError(this.id, this.estado, 'registrarReporte');
-    }
+    this.#exigirEstado('registrarReporte', ESTADOS_PARTIDO.EN_JUEGO);
 
-    if (resultado !== RESULTADOS_REPORTE.GANA_A && resultado !== RESULTADOS_REPORTE.GANA_B) {
+    if (!Object.values(RESULTADOS_REPORTE).includes(resultado)) {
       throw new ReporteInvalidoError(`Resultado no reconocido: ${resultado}`);
     }
 
-    const esEquipoA = this.equipoAId === equipoId;
-    const esEquipoB = this.equipoBId === equipoId;
+    this.#exigirEquipoDelPartido(equipoId);
 
-    if (!esEquipoA && !esEquipoB) {
-      throw new ReporteInvalidoError(`El equipo ${equipoId} no pertenece al partido`, {
-        partidoId: this.id,
-        equipoId
-      });
-    }
-
-    if (esEquipoA) {
+    if (equipoId === this.equipoAId) {
       this.reporteEquipoA = resultado;
       if (evidenciaUrl) this.evidenciaAUrl = evidenciaUrl;
     } else {
@@ -135,182 +135,102 @@ export class Partido {
       if (evidenciaUrl) this.evidenciaBUrl = evidenciaUrl;
     }
 
-    if (this.reporteEquipoA && this.reporteEquipoB) {
-      const coinciden = this.reporteEquipoA === this.reporteEquipoB;
+    if (!this.reporteEquipoA || !this.reporteEquipoB) {
+      return { estado: this.estado, ganadorId: null, enDisputa: false, confirmado: false, avanza: false };
+    }
 
-      if (coinciden) {
-        this.estado = ESTADOS_PARTIDO.CONFIRMADO;
-        this.ganadorId = this.reporteEquipoA === RESULTADOS_REPORTE.GANA_A ? this.equipoAId : this.equipoBId;
-        return {
-          estado: this.estado,
-          ganadorId: this.ganadorId,
-          enDisputa: false,
-          confirmado: true,
-          avanza: true,
-          siguientePartidoId: this.siguientePartidoId,
-          slotSiguiente: this.slotSiguiente
-        };
-      }
-
+    if (this.reporteEquipoA !== this.reporteEquipoB) {
       this.estado = ESTADOS_PARTIDO.EN_DISPUTA;
       this.ganadorId = null;
-      return {
-        estado: this.estado,
-        ganadorId: null,
-        enDisputa: true,
-        confirmado: false,
-        avanza: false
-      };
+      return { estado: this.estado, ganadorId: null, enDisputa: true, confirmado: false, avanza: false };
     }
+
+    this.estado = ESTADOS_PARTIDO.CONFIRMADO;
+    this.ganadorId = this.reporteEquipoA === RESULTADOS_REPORTE.GANA_A ? this.equipoAId : this.equipoBId;
 
     return {
       estado: this.estado,
-      ganadorId: null,
       enDisputa: false,
-      confirmado: false,
-      avanza: false
+      confirmado: true,
+      ...this.#datosDeAvance()
     };
   }
 
   resolverDisputaArbitral({ ganadorId, motivo, arbitroId }) {
-    if (this.estado !== ESTADOS_PARTIDO.EN_DISPUTA) {
-      throw new PartidoNoModificableError(this.id, this.estado, 'resolverDisputaArbitral');
-    }
-
-    if (!arbitroId || !motivo) {
-      throw new ReglaDeNegocioError('Se requiere arbitroId y motivo');
-    }
-
-    if (ganadorId !== this.equipoAId && ganadorId !== this.equipoBId) {
-      throw new ReporteInvalidoError(`El ganador ${ganadorId} no pertenece al partido`);
-    }
+    this.#exigirEstado('resolverDisputaArbitral', ESTADOS_PARTIDO.EN_DISPUTA);
+    this.#exigirArbitroYMotivo(arbitroId, motivo);
+    this.#exigirEquipoDelPartido(ganadorId);
 
     this.ganadorId = ganadorId;
     this.estado = ESTADOS_PARTIDO.CONFIRMADO;
 
-    return {
-      partidoId: this.id,
-      ganadorId: this.ganadorId,
-      arbitroId,
-      motivo,
-      siguientePartidoId: this.siguientePartidoId,
-      slotSiguiente: this.slotSiguiente,
-      avanza: true
-    };
+    return { arbitroId, motivo, ...this.#datosDeAvance() };
   }
 
-  declararVictoriaPorWO(ganadorId, motivo = 'Rival ausente en check-in (W.O.)') {
-    if (ganadorId !== this.equipoAId && ganadorId !== this.equipoBId) {
-      throw new ReporteInvalidoError(`El ganador por W.O. ${ganadorId} no pertenece al partido`);
-    }
+  declararVictoriaPorWO(ganadorId, motivo = 'El rival no se presentó a disputar el partido') {
+    this.#exigirEstado('declararVictoriaPorWO', ESTADOS_PARTIDO.EN_JUEGO);
+    this.#exigirEquipoDelPartido(ganadorId);
 
     this.ganadorId = ganadorId;
     this.estado = ESTADOS_PARTIDO.CONFIRMADO;
 
-    return {
-      partidoId: this.id,
-      ganadorId: this.ganadorId,
-      motivo,
-      siguientePartidoId: this.siguientePartidoId,
-      slotSiguiente: this.slotSiguiente,
-      avanza: true
-    };
+    return { motivo, ...this.#datosDeAvance() };
   }
 
-  anularPorArbitro({ arbitroId, motivo, reabrir = false }) {
-    if (this.estado !== ESTADOS_PARTIDO.CONFIRMADO && this.estado !== ESTADOS_PARTIDO.EN_DISPUTA) {
-      throw new PartidoNoModificableError(this.id, this.estado, 'anularPorArbitro');
+  anularPorArbitro({ arbitroId, motivo, resolucion, ganadorId = null }) {
+    this.#exigirEstado('anularPorArbitro', ESTADOS_PARTIDO.CONFIRMADO, ESTADOS_PARTIDO.EN_DISPUTA);
+    this.#exigirArbitroYMotivo(arbitroId, motivo);
+
+    if (this.esBye) {
+      throw new ReglaDeNegocioError('Un partido de descanso (Bye) no se puede anular');
     }
 
-    if (!arbitroId || !motivo) {
-      throw new ReglaDeNegocioError('Se requiere arbitroId y motivo');
+    if (!Object.values(RESOLUCIONES_ANULACION).includes(resolucion)) {
+      throw new ReglaDeNegocioError(`Resolución de anulación inválida: ${resolucion}`);
     }
 
-    const ganadorPrevio = this.ganadorId;
-    const estadoAnterior = {
-      estado: this.estado,
-      ganadorId: this.ganadorId,
-      reporteEquipoA: this.reporteEquipoA,
-      reporteEquipoB: this.reporteEquipoB,
-      evidenciaAUrl: this.evidenciaAUrl,
-      evidenciaBUrl: this.evidenciaBUrl
-    };
+    const estadoAnterior = this.#capturarEstado();
 
-    if (reabrir) {
+    if (resolucion === RESOLUCIONES_ANULACION.REJUGAR) {
+      this.#limpiarReportes();
+      this.ganadorId = null;
       this.estado = ESTADOS_PARTIDO.EN_JUEGO;
-      this.reporteEquipoA = null;
-      this.reporteEquipoB = null;
-      this.evidenciaAUrl = null;
-      this.evidenciaBUrl = null;
-      this.ganadorId = null;
     } else {
-      this.estado = ESTADOS_PARTIDO.ANULADO;
-      this.ganadorId = null;
+      this.#exigirEquipoDelPartido(ganadorId);
+      this.ganadorId = ganadorId;
+      this.estado = ESTADOS_PARTIDO.CONFIRMADO;
     }
+
+    const avanzoAlguien = estadoAnterior.estado === ESTADOS_PARTIDO.CONFIRMADO;
 
     return {
       partidoId: this.id,
       arbitroId,
       motivo,
-      ganadorPrevio,
+      resolucion,
       estadoAnterior,
-      reabierto: Boolean(reabrir),
+      ganadorPrevio: estadoAnterior.ganadorId,
+      ganadorId: this.ganadorId,
+      debeRevertirSiguiente: avanzoAlguien && estadoAnterior.ganadorId !== this.ganadorId,
+      avanza: this.estado === ESTADOS_PARTIDO.CONFIRMADO && estadoAnterior.ganadorId !== this.ganadorId,
       siguientePartidoId: this.siguientePartidoId,
       slotSiguiente: this.slotSiguiente
     };
   }
 
-  reabrirParaRejugar({ arbitroId = null, motivo = 'Reapertura arbitral para volver a disputar el partido' } = {}) {
-    if (this.estado !== ESTADOS_PARTIDO.ANULADO && this.estado !== ESTADOS_PARTIDO.EN_DISPUTA) {
-      throw new PartidoNoModificableError(this.id, this.estado, 'reabrirParaRejugar');
-    }
-
-    if (!this.equipoAId || !this.equipoBId) {
-      throw new ReglaDeNegocioError('No se puede reabrir un partido sin ambos equipos asignados');
-    }
-
-    const estadoAnterior = {
-      estado: this.estado,
-      ganadorId: this.ganadorId,
-      reporteEquipoA: this.reporteEquipoA,
-      reporteEquipoB: this.reporteEquipoB,
-      evidenciaAUrl: this.evidenciaAUrl,
-      evidenciaBUrl: this.evidenciaBUrl
-    };
-
-    this.reporteEquipoA = null;
-    this.reporteEquipoB = null;
-    this.evidenciaAUrl = null;
-    this.evidenciaBUrl = null;
-    this.ganadorId = null;
-    this.estado = ESTADOS_PARTIDO.EN_JUEGO;
-
-    return {
-      partidoId: this.id,
-      arbitroId,
-      motivo,
-      estadoAnterior,
-      estado: this.estado
-    };
-  }
-
   revertirSlot(slot) {
+    this.#exigirSlotValido(slot);
+
     if (slot === 'A') {
       this.equipoAId = null;
-    } else if (slot === 'B') {
-      this.equipoBId = null;
     } else {
-      throw new ReglaDeNegocioError(`Slot inválido: ${slot}`);
+      this.equipoBId = null;
     }
-
-    this.reporteEquipoA = null;
-    this.reporteEquipoB = null;
-    this.evidenciaAUrl = null;
-    this.evidenciaBUrl = null;
 
     const estabaConfirmado = this.estado === ESTADOS_PARTIDO.CONFIRMADO;
     const ganadorPrevio = this.ganadorId;
 
+    this.#limpiarReportes();
     this.ganadorId = null;
     this.estado = ESTADOS_PARTIDO.PENDIENTE;
 
@@ -318,6 +238,61 @@ export class Partido {
       partidoId: this.id,
       debeRevertirSiguientes: estabaConfirmado,
       ganadorPrevio,
+      siguientePartidoId: this.siguientePartidoId,
+      slotSiguiente: this.slotSiguiente
+    };
+  }
+
+  #exigirEstado(accion, ...estadosPermitidos) {
+    if (!estadosPermitidos.includes(this.estado)) {
+      throw new PartidoNoModificableError(this.id, this.estado, accion);
+    }
+  }
+
+  #exigirSlotValido(slot) {
+    if (!SLOTS.includes(slot)) {
+      throw new ReglaDeNegocioError(`Slot inválido: ${slot}`);
+    }
+  }
+
+  #exigirEquipoDelPartido(equipoId) {
+    if (!equipoId || (equipoId !== this.equipoAId && equipoId !== this.equipoBId)) {
+      throw new ReporteInvalidoError(`El equipo ${equipoId} no pertenece al partido`, {
+        partidoId: this.id,
+        equipoId
+      });
+    }
+  }
+
+  #exigirArbitroYMotivo(arbitroId, motivo) {
+    if (!arbitroId || !motivo) {
+      throw new ReglaDeNegocioError('Se requiere arbitroId y motivo');
+    }
+  }
+
+  #limpiarReportes() {
+    this.reporteEquipoA = null;
+    this.reporteEquipoB = null;
+    this.evidenciaAUrl = null;
+    this.evidenciaBUrl = null;
+  }
+
+  #capturarEstado() {
+    return {
+      estado: this.estado,
+      ganadorId: this.ganadorId,
+      reporteEquipoA: this.reporteEquipoA,
+      reporteEquipoB: this.reporteEquipoB,
+      evidenciaAUrl: this.evidenciaAUrl,
+      evidenciaBUrl: this.evidenciaBUrl
+    };
+  }
+
+  #datosDeAvance() {
+    return {
+      partidoId: this.id,
+      ganadorId: this.ganadorId,
+      avanza: true,
       siguientePartidoId: this.siguientePartidoId,
       slotSiguiente: this.slotSiguiente
     };
