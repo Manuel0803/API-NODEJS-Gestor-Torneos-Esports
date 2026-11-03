@@ -52,6 +52,10 @@ Se adopta la **Opción 2**:
 2. `Partido.anularPorArbitro` exige el parámetro obligatorio `resolucion` (`REJUGAR` o `VICTORIA_ADMINISTRATIVA`), retornando el dictamen y si debe dispararse la reversión en cascada.
 3. `Partido.revertirSlot` resetea incondicionalmente los reportes y evidencias de ambos contrincantes (`reporteEquipoA = null`, `reporteEquipoB = null`, `evidenciaAUrl = null`, `evidenciaBUrl = null`) y regresa el partido a `PENDIENTE`.
 4. Se bloquea el método `registrarReporte` si el partido está en `EN_DISPUTA`, otorgando exclusividad resolutiva al `ARBITRO`.
+5. **Integración con Servicio Externo Django vía Puertos y Política _Fail-Closed_:**
+   - El dominio define los contratos `PuertoProveedorIdentidad` y `PuertoAlmacenEvidencias` en `src/dominio/puertos/index.js`.
+   - Para cumplir con la regla de clon limpio, por defecto el sistema utiliza los adaptadores en memoria (`ProveedorIdentidadMemoria` y `AlmacenEvidenciasMemoria` cuando `EXTERNAL_ADAPTER_MODE=mock`).
+   - En modo HTTP (`EXTERNAL_ADAPTER_MODE=http`), las llamadas se ejecutan fuera de las transacciones SQL con bloqueo y con un timeout estricto (`AbortSignal.timeout`). Si el servicio externo cae o excede el tiempo límite, el adaptador lanza `ServicioExternoNoDisponibleError` negando la operación crítica (_fail-closed_).
 
 ---
 
