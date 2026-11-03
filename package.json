@@ -11,7 +11,7 @@
     "dev": "node --watch --env-file=.env src/servidor.js",
     "start": "node src/servidor.js",
     "setup": "node --env-file=.env src/infra/db/setup.js",
-    "test": "node --test --env-file=.env tests/**/*.test.js",
+    "test": "node --test --env-file-if-exists=.env \"tests/**/*.test.js\"",
     "lint": "eslint ."
   },
   "keywords": [
@@ -26,7 +26,6 @@
   "dependencies": {
     "argon2": "^0.45.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
