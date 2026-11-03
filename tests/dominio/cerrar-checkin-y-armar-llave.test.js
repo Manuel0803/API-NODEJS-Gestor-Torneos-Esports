@@ -9,21 +9,21 @@ import {
   EntidadNoEncontradaError, ReglaDeNegocioError, TorneoCerradoError,
 } from '../../src/dominio/errores/index.js';
 
-async function escenario({ presentes, ausentes = 0, ahora = '2026-12-11T02:00:00Z' }) { 
-  const uow = new UnidadDeTrabajoMemoria();                 
-  const reloj = new RelojFijo(ahora);                        
-  await uow.torneos.guardar(new Torneo({                     
+async function escenario({ presentes, ausentes = 0, ahora = '2026-12-11T02:00:00Z' }) {
+  const uow = new UnidadDeTrabajoMemoria();
+  const reloj = new RelojFijo(ahora);
+  await uow.torneos.guardar(new Torneo({
     id: 't1', nombre: 'Copa', juego: 'LoL', cupoMaximo: 16, tamanoEquipo: 1,
-    semillaSorteo: 'semilla-test', 
+    semillaSorteo: 'semilla-test',
     inscriptosActuales: presentes + ausentes,
     fechaCierreInscripcion: '2026-12-10T00:00:00Z',
     inicioCheckin: '2026-12-11T00:00:00Z', finCheckin: '2026-12-11T01:00:00Z',
   }));
-  for (let i = 1; i <= presentes + ausentes; i++) {         
+  for (let i = 1; i <= presentes + ausentes; i++) {
     await uow.inscripciones.guardar(new Inscripcion({
       id: `i${i}`, torneoId: 't1', equipoId: `e${i}`, ordenInscripcion: i,
       jugadoresIds: [`j${i}`],
-      checkinConfirmado: i <= presentes,                      
+      checkinConfirmado: i <= presentes,
     }));
   }
   return { uow, casoDeUso: new CerrarCheckinYArmarLlave({ unidadDeTrabajo: uow, reloj }) };
@@ -33,9 +33,9 @@ describe('CerrarCheckinYArmarLlave', () => {
   it('arma la llave de 13 equipos con 3 byes y pone el torneo EN_CURSO', async () => {
     const { uow, casoDeUso } = await escenario({ presentes: 13 });
     const generados = await casoDeUso.ejecutar({ torneoId: 't1' });
-    assert.equal(generados.length, 15);                      
+    assert.equal(generados.length, 15);
     assert.equal(generados.filter((p) => p.esBye).length, 3);
-    assert.equal((await uow.partidos.obtenerPorTorneo('t1')).length, 15); 
+    assert.equal((await uow.partidos.obtenerPorTorneo('t1')).length, 15);
     assert.equal((await uow.torneos.obtenerPorId('t1')).estado, ESTADOS_TORNEO.EN_CURSO);
   });
 
@@ -45,7 +45,7 @@ describe('CerrarCheckinYArmarLlave', () => {
     const ausente = await uow.inscripciones.obtenerPorTorneoYEquipo('t1', 'e5');
     assert.equal(ausente.estado, ESTADOS_INSCRIPCION.ELIMINADO_WO);
     const partidos = await uow.partidos.obtenerPorTorneo('t1');
-    assert.equal(partidos.length, 3);                         
+    assert.equal(partidos.length, 3);
     assert.equal(partidos.some((p) => p.equipoAId === 'e5' || p.equipoBId === 'e5'), false);
   });
 
@@ -56,19 +56,23 @@ describe('CerrarCheckinYArmarLlave', () => {
     assert.equal((await uow.partidos.obtenerPorTorneo('t1')).length, 0);
   });
 
-  it('rechaza con menos de 2 presentes y no deja cambios', async () => {
+  it('cancela el torneo y marca W.O. a los ausentes si hay menos de 2 presentes', async () => {
     const { uow, casoDeUso } = await escenario({ presentes: 1, ausentes: 2 });
-    await assert.rejects(() => casoDeUso.ejecutar({ torneoId: 't1' }), ReglaDeNegocioError);
-    assert.equal((await uow.torneos.obtenerPorId('t1')).estado, ESTADOS_TORNEO.ABIERTO);
-    const inscripciones = await uow.inscripciones.obtenerPorTorneo('t1');
-    assert.equal(inscripciones.every((i) => i.estado === ESTADOS_INSCRIPCION.CONFIRMADA), true); 
+    const generados = await casoDeUso.ejecutar({ torneoId: 't1' });
+    assert.deepEqual(generados, []);
+    assert.equal((await uow.torneos.obtenerPorId('t1')).estado, ESTADOS_TORNEO.CANCELADO);
+    assert.equal((await uow.partidos.obtenerPorTorneo('t1')).length, 0);
+    const ausente2 = await uow.inscripciones.obtenerPorTorneoYEquipo('t1', 'e2');
+    const ausente3 = await uow.inscripciones.obtenerPorTorneoYEquipo('t1', 'e3');
+    assert.equal(ausente2.estado, ESTADOS_INSCRIPCION.ELIMINADO_WO);
+    assert.equal(ausente3.estado, ESTADOS_INSCRIPCION.ELIMINADO_WO);
   });
 
   it('no permite armar la llave dos veces', async () => {
     const { uow, casoDeUso } = await escenario({ presentes: 4 });
     await casoDeUso.ejecutar({ torneoId: 't1' });
     await assert.rejects(() => casoDeUso.ejecutar({ torneoId: 't1' }), TorneoCerradoError);
-    assert.equal((await uow.partidos.obtenerPorTorneo('t1')).length, 3); 
+    assert.equal((await uow.partidos.obtenerPorTorneo('t1')).length, 3);
   });
 
   it('falla si el torneo no existe', async () => {

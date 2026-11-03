@@ -8,12 +8,17 @@ import {
 import { Inscripcion } from '../entidades/Inscripcion.js';
 
 export class InscribirEquipo {
-  constructor({ unidadDeTrabajo, reloj }) {
+  constructor({ unidadDeTrabajo, reloj, proveedorIdentidad = null }) {
     this.unidadDeTrabajo = unidadDeTrabajo;
     this.reloj = reloj;
+    this.proveedorIdentidad = proveedorIdentidad;
   }
 
   async ejecutar({ torneoId, equipoId, jugadoresIds, usuarioSolicitanteId }) {
+    if (this.proveedorIdentidad) {
+      await this.proveedorIdentidad.verificarJugadores(jugadoresIds);
+    }
+
     return this.unidadDeTrabajo.ejecutar(async ({ torneos, equipos, inscripciones }) => {
       const torneo = await torneos.obtenerPorIdConBloqueo(torneoId);
       if (!torneo) throw new EntidadNoEncontradaError('Torneo', torneoId);
