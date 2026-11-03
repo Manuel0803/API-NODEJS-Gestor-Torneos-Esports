@@ -10,7 +10,8 @@ import { ESTADOS_PARTIDO } from './Partido.js';
 export const ESTADOS_TORNEO = Object.freeze({
   ABIERTO: 'ABIERTO',
   EN_CURSO: 'EN_CURSO',
-  FINALIZADO: 'FINALIZADO'
+  FINALIZADO: 'FINALIZADO',
+  CANCELADO: 'CANCELADO'
 });
 
 export const FORMATOS_TORNEO = Object.freeze({
@@ -192,6 +193,22 @@ export class Torneo {
     }
 
     this.estado = ESTADOS_TORNEO.EN_CURSO;
+  }
+
+  cancelarPorFaltaDeComparecencia({ fechaActual = new Date(), cantidadConfirmados } = {}) {
+    if (this.estado !== ESTADOS_TORNEO.ABIERTO) {
+      throw new TorneoCerradoError('Solo se puede cancelar un torneo en estado ABIERTO');
+    }
+
+    if (!this.checkinHaVencido(fechaActual)) {
+      throw new ReglaDeNegocioError('No se puede cerrar el check-in antes de que venza su ventana');
+    }
+
+    if (Number.isInteger(cantidadConfirmados) && cantidadConfirmados >= 2) {
+      throw new ReglaDeNegocioError('Hay suficientes equipos confirmados para iniciar el torneo');
+    }
+
+    this.estado = ESTADOS_TORNEO.CANCELADO;
   }
 
   finalizarTorneo({ partidoFinal } = {}) {

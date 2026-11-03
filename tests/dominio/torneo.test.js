@@ -447,5 +447,29 @@ describe('Entidad de Dominio: Torneo', () => {
         TorneoCerradoError
       );
     });
+
+    it('cancelarPorFaltaDeComparecencia pasa el torneo a CANCELADO si hay menos de 2 presentes y venció el check-in', () => {
+      const torneo = new Torneo({ ...torneoBase });
+      const antesDeCierre = new Date('2026-11-01T13:30:00Z');
+      const despuesDeCierre = new Date('2026-11-01T14:05:00Z');
+
+      assert.throws(
+        () => torneo.cancelarPorFaltaDeComparecencia({ fechaActual: antesDeCierre, cantidadConfirmados: 1 }),
+        ReglaDeNegocioError
+      );
+
+      assert.throws(
+        () => torneo.cancelarPorFaltaDeComparecencia({ fechaActual: despuesDeCierre, cantidadConfirmados: 2 }),
+        ReglaDeNegocioError
+      );
+
+      torneo.cancelarPorFaltaDeComparecencia({ fechaActual: despuesDeCierre, cantidadConfirmados: 1 });
+      assert.equal(torneo.estado, ESTADOS_TORNEO.CANCELADO);
+
+      assert.throws(
+        () => torneo.cancelarPorFaltaDeComparecencia({ fechaActual: despuesDeCierre, cantidadConfirmados: 0 }),
+        TorneoCerradoError
+      );
+    });
   });
 });

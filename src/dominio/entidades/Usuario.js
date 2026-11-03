@@ -44,16 +44,32 @@ export class Usuario {
     return this.rol === ROLES.ORGANIZADOR;
   }
 
+  tieneRolOrganizador() {
+    return this.esOrganizador();
+  }
+
   esArbitro() {
     return this.rol === ROLES.ARBITRO;
+  }
+
+  tieneRolArbitro() {
+    return this.esArbitro();
   }
 
   esCapitan() {
     return this.rol === ROLES.CAPITAN;
   }
 
+  tieneRolCapitan() {
+    return this.esCapitan();
+  }
+
   esJugador() {
     return this.rol === ROLES.JUGADOR;
+  }
+
+  tieneRolJugador() {
+    return this.esJugador();
   }
 
   actualizarElo(nuevoElo) {
