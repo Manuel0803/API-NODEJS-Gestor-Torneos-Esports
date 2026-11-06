@@ -1,13 +1,20 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import { middlewareCorrelacion } from './middlewares/contextoCorrelacion.js';
+import {
+  middlewareRutaNoEncontrada,
+  manejadorErrores
+} from './middlewares/manejadorErrores.js';
 
 export function crearApp({
   corsOrigin = 'http://localhost:3000',
-  verificarDisponibilidad = async () => true
+  verificarDisponibilidad = async () => true,
+  configurarRutas = null
 } = {}) {
   const app = express();
 
+  app.use(middlewareCorrelacion);
   app.use(helmet());
   app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
@@ -28,6 +35,12 @@ export function crearApp({
     }
   });
 
+  if (typeof configurarRutas === 'function') {
+    configurarRutas(app);
+  }
+
+  app.use(middlewareRutaNoEncontrada);
+  app.use(manejadorErrores);
+
   return app;
 }
-

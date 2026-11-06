@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { cargarEnv } from './config/env.js';
 import { crearDependencias } from './composicion.js';
 import { crearApp } from './infra/http/app.js';
+import { logger } from './infra/http/middlewares/contextoCorrelacion.js';
 
 export async function procesarCheckinsVencidos({
   unidadDeTrabajo,
@@ -34,14 +35,10 @@ export function iniciarServidor({
   });
 
   const servidorHttp = app.listen(env.PORT, () => {
-    console.log(
-      JSON.stringify({
-        nivel: 'info',
-        mensaje: 'Servidor HTTP iniciado',
-        puerto: env.PORT,
-        entorno: env.NODE_ENV
-      })
-    );
+    logger.info('Servidor HTTP iniciado', {
+      puerto: env.PORT,
+      entorno: env.NODE_ENV
+    });
   });
 
   const timerCheckin = setInterval(() => {
@@ -50,13 +47,9 @@ export function iniciarServidor({
       cerrarCheckinYArmarLlave: dependencias.casosDeUso.cerrarCheckinYArmarLlave,
       reloj: dependencias.reloj
     }).catch((error) => {
-      console.error(
-        JSON.stringify({
-          nivel: 'error',
-          mensaje: 'Error en job periodico de cierre de check-in',
-          detalle: error.message
-        })
-      );
+      logger.error('Error en job periodico de cierre de check-in', {
+        detalle: error.message
+      });
     });
   }, intervaloCheckinMs);
 
@@ -68,22 +61,12 @@ export function iniciarServidor({
     if (cerrando) return;
     cerrando = true;
 
-    console.log(
-      JSON.stringify({
-        nivel: 'info',
-        mensaje: `Senal ${senal} recibida, iniciando cierre del servidor`
-      })
-    );
+    logger.info(`Senal ${senal} recibida, iniciando cierre del servidor`);
 
     clearInterval(timerCheckin);
 
     const timerForzado = setTimeout(() => {
-      console.error(
-        JSON.stringify({
-          nivel: 'error',
-          mensaje: 'Tiempo de espera agotado al cerrar el servidor, forzando salida'
-        })
-      );
+      logger.error('Tiempo de espera agotado al cerrar el servidor, forzando salida');
       process.exit(1);
     }, env.SHUTDOWN_TIMEOUT_MS);
 
@@ -95,13 +78,9 @@ export function iniciarServidor({
         clearTimeout(timerForzado);
         process.exit(0);
       } catch (error) {
-        console.error(
-          JSON.stringify({
-            nivel: 'error',
-            mensaje: 'Error liberando recursos al cerrar el servidor',
-            detalle: error.message
-          })
-        );
+        logger.error('Error liberando recursos al cerrar el servidor', {
+          detalle: error.message
+        });
         process.exit(1);
       }
     });
@@ -119,4 +98,3 @@ const esEjecucionDirecta =
 if (esEjecucionDirecta) {
   iniciarServidor();
 }
-
