@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Torneo } from '../../dominio/entidades/Torneo.js';
+import { Torneo,ESTADOS_TORNEO } from '../../dominio/entidades/Torneo.js';
 import { Equipo } from '../../dominio/entidades/Equipo.js';
 import { Inscripcion } from '../../dominio/entidades/Inscripcion.js';
 import { Partido } from '../../dominio/entidades/Partido.js';
@@ -25,6 +25,12 @@ class RepoTorneoMemoria extends RepoMemoria {
   constructor() { super(Torneo); }
   async obtenerPorIdConBloqueo(id) {
     return this.obtenerPorId(id);
+  }
+   async obtenerAbiertosConCheckinVencido(ahora) {
+    return [...this.datos.values()]
+      .filter((t) => t.estado === 'ABIERTO' && t.finCheckin < ahora)
+      .sort((a, b) => a.finCheckin - b.finCheckin)
+      .map((t) => this.copiar(t));
   }
 }
 
