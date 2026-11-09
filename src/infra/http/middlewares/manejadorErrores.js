@@ -1,4 +1,4 @@
-import { ErrorDominio } from '../../../dominio/errores/index.js';
+import { ErrorDeDominio } from '../../../dominio/errores/index.js';
 import { obtenerCorrelationId, logger } from './contextoCorrelacion.js';
 
 const MAPA_ERRORES_DOMINIO = {
@@ -102,7 +102,7 @@ export function manejadorErrores(err, req, res, _next) {
     });
   }
 
-  if (err instanceof ErrorDominio) {
+if (err instanceof ErrorDeDominio) {
     const definicion = MAPA_ERRORES_DOMINIO[err.codigo] ?? {
       status: 400,
       type: 'https://api.torneos.esports/errores/regla-de-negocio',
