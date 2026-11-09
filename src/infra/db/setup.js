@@ -7,10 +7,10 @@ import { crearPool, cerrarPool } from './pool.js';
 const OPCIONES_ARGON2 = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 
 const USUARIOS_SEMILLA = [
-  { nombre: 'Organizador', email: 'organizador@torneos.test', rol: 'ORGANIZADOR' },
-  { nombre: 'Arbitro', email: 'arbitro@torneos.test', rol: 'ARBITRO' },
-  { nombre: 'Capitan', email: 'capitan@torneos.test', rol: 'CAPITAN' },
-  { nombre: 'Jugador', email: 'jugador@torneos.test', rol: 'JUGADOR' },
+  { nombreUsuario: 'organizador', gamerTag: 'Organizador', email: 'organizador@torneos.test', rol: 'ORGANIZADOR' },
+  { nombreUsuario: 'arbitro', gamerTag: 'Arbitro', email: 'arbitro@torneos.test', rol: 'ARBITRO' },
+  { nombreUsuario: 'capitan', gamerTag: 'Capitan', email: 'capitan@torneos.test', rol: 'CAPITAN' },
+  { nombreUsuario: 'jugador', gamerTag: 'Jugador', email: 'jugador@torneos.test', rol: 'JUGADOR' },
 ];
 
 async function main() {
@@ -28,11 +28,11 @@ async function main() {
 
     const hash = await argon2.hash(clave, OPCIONES_ARGON2);
       for (const u of USUARIOS_SEMILLA) {
-      await pool.query(
-        `INSERT INTO usuarios (id, nombre_usuario, gamer_tag, email, password_hash, rol)
+          await pool.query(
+        `INSERT INTO usuarios (id, email, password_hash, nombre_usuario, gamer_tag, rol)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (email) DO NOTHING`,
-        [randomUUID(), u.nombre, u.nombre, u.email, hash, u.rol],
+        [randomUUID(), u.email, hash, u.nombreUsuario, u.gamerTag, u.rol],
       );
     }
     console.log('Esquema aplicado y usuarios semilla cargados');

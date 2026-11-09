@@ -1,12 +1,10 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-CREATE TABLE usuarios (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    nombre_usuario VARCHAR(100) UNIQUE NOT NULL,
-    gamer_tag VARCHAR(100) NOT NULL,
-    rol VARCHAR(20) NOT NULL CHECK (
+CREATE TABLE IF NOT EXISTS usuarios (
+    id uuid PRIMARY KEY,
+    email text NOT NULL UNIQUE,
+    password_hash text NOT NULL,
+    nombre_usuario text NOT NULL UNIQUE,
+    gamer_tag text NOT NULL,
+    rol text NOT NULL CHECK (
         rol IN (
             'ORGANIZADOR',
             'ARBITRO',
@@ -14,23 +12,25 @@ CREATE TABLE usuarios (
             'JUGADOR'
         )
     ),
-    puntos_elo INT NOT NULL DEFAULT 1000,
-    creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    puntos_elo integer NOT NULL DEFAULT 1000,
+    creado_en timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE torneos (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    nombre VARCHAR(150) NOT NULL,
-    juego VARCHAR(100) NOT NULL,
-    formato VARCHAR(30) NOT NULL DEFAULT 'ELIMINACION_SIMPLE',
-    cupo_maximo INT NOT NULL CHECK (cupo_maximo >= 2),
-    inscriptos_actuales INT NOT NULL DEFAULT 0,
-    tamano_equipo INT NOT NULL CHECK (tamano_equipo >= 1),
-    semilla_sorteo VARCHAR(100) NOT NULL,
-    fecha_cierre_inscripcion TIMESTAMPTZ NOT NULL,
-    inicio_checkin TIMESTAMPTZ NOT NULL,
-    fin_checkin TIMESTAMPTZ NOT NULL,
-    estado VARCHAR(20) NOT NULL DEFAULT 'ABIERTO' CHECK (
+CREATE TABLE IF NOT EXISTS torneos (
+    id uuid PRIMARY KEY,
+    nombre text NOT NULL,
+    juego text NOT NULL,
+    formato text NOT NULL CHECK (
+        formato IN ('ELIMINACION_SIMPLE')
+    ),
+    cupo_maximo integer NOT NULL CHECK (cupo_maximo >= 2),
+    inscriptos_actuales integer NOT NULL DEFAULT 0 CHECK (inscriptos_actuales >= 0),
+    tamano_equipo integer NOT NULL CHECK (tamano_equipo >= 1),
+    semilla_sorteo text NOT NULL,
+    fecha_cierre_inscripcion timestamptz NOT NULL,
+    inicio_checkin timestamptz NOT NULL,
+    fin_checkin timestamptz NOT NULL,
+    estado text NOT NULL DEFAULT 'ABIERTO' CHECK (
         estado IN (
             'ABIERTO',
             'EN_CURSO',
@@ -38,56 +38,62 @@ CREATE TABLE torneos (
             'CANCELADO'
         )
     ),
-    CONSTRAINT chk_cupo_no_excedido CHECK (
+    CONSTRAINT torneos_cupo_no_excedido CHECK (
         inscriptos_actuales <= cupo_maximo
-    )
+    ),
+    CONSTRAINT torneos_ventana_checkin CHECK (fin_checkin > inicio_checkin)
 );
 
-CREATE TABLE equipos (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    nombre VARCHAR(100) UNIQUE NOT NULL,
-    capitan_id UUID NOT NULL REFERENCES usuarios (id)
+CREATE INDEX IF NOT EXISTS idx_torneos_checkin_vencido ON torneos (fin_checkin)
+WHERE
+    estado = 'ABIERTO';
+
+CREATE TABLE IF NOT EXISTS equipos (
+    id uuid PRIMARY KEY,
+    nombre text NOT NULL UNIQUE,
+    capitan_id uuid NOT NULL REFERENCES usuarios (id) ON DELETE RESTRICT
 );
 
-CREATE TABLE inscripciones (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    torneo_id UUID NOT NULL REFERENCES torneos (id) ON DELETE RESTRICT,
-    equipo_id UUID NOT NULL REFERENCES equipos (id),
-    checkin_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
-    estado VARCHAR(20) NOT NULL DEFAULT 'CONFIRMADA' CHECK (
+CREATE TABLE IF NOT EXISTS inscripciones (
+    id uuid PRIMARY KEY,
+    torneo_id uuid NOT NULL REFERENCES torneos (id) ON DELETE RESTRICT,
+    equipo_id uuid NOT NULL REFERENCES equipos (id) ON DELETE RESTRICT,
+    checkin_confirmado boolean NOT NULL DEFAULT false,
+    estado text NOT NULL DEFAULT 'CONFIRMADA' CHECK (
         estado IN ('CONFIRMADA', 'ELIMINADO_WO')
     ),
-    orden_inscripcion INT NOT NULL,
-    creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (torneo_id, equipo_id)
+    orden_inscripcion integer NOT NULL,
+    creado_en timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT inscripciones_equipo_unico_por_torneo UNIQUE (torneo_id, equipo_id),
+    CONSTRAINT inscripciones_orden_unico_por_torneo UNIQUE (torneo_id, orden_inscripcion)
 );
 
-CREATE TABLE inscripcion_jugadores (
-    inscripcion_id UUID NOT NULL REFERENCES inscripciones (id) ON DELETE RESTRICT,
-    torneo_id UUID NOT NULL REFERENCES torneos (id) ON DELETE RESTRICT,
-    jugador_id UUID NOT NULL REFERENCES usuarios (id),
+CREATE TABLE IF NOT EXISTS inscripcion_jugadores (
+    inscripcion_id uuid NOT NULL REFERENCES inscripciones (id) ON DELETE RESTRICT,
+    torneo_id uuid NOT NULL REFERENCES torneos (id) ON DELETE RESTRICT,
+    jugador_id uuid NOT NULL REFERENCES usuarios (id) ON DELETE RESTRICT,
     PRIMARY KEY (inscripcion_id, jugador_id),
-    UNIQUE (torneo_id, jugador_id)
+    CONSTRAINT jugador_unico_por_torneo UNIQUE (torneo_id, jugador_id)
 );
 
-CREATE TABLE partidos (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    torneo_id UUID NOT NULL REFERENCES torneos (id) ON DELETE RESTRICT,
-    ronda INT NOT NULL,
-    posicion_en_ronda INT NOT NULL,
-    equipo_a_id UUID REFERENCES equipos (id),
-    equipo_b_id UUID REFERENCES equipos (id),
-    es_bye BOOLEAN NOT NULL DEFAULT FALSE,
-    reporte_equipo_a VARCHAR(10) CHECK (
+CREATE TABLE IF NOT EXISTS partidos (
+    id uuid PRIMARY KEY,
+    torneo_id uuid NOT NULL REFERENCES torneos (id) ON DELETE RESTRICT,
+    ronda integer NOT NULL CHECK (ronda >= 1),
+    posicion_en_ronda integer NOT NULL CHECK (posicion_en_ronda >= 0),
+    equipo_a_id uuid REFERENCES equipos (id) ON DELETE RESTRICT,
+    equipo_b_id uuid REFERENCES equipos (id) ON DELETE RESTRICT,
+    es_bye boolean NOT NULL DEFAULT false,
+    reporte_equipo_a text CHECK (
         reporte_equipo_a IN ('GANA_A', 'GANA_B')
     ),
-    reporte_equipo_b VARCHAR(10) CHECK (
+    reporte_equipo_b text CHECK (
         reporte_equipo_b IN ('GANA_A', 'GANA_B')
     ),
-    evidencia_a_url TEXT,
-    evidencia_b_url TEXT,
-    ganador_id UUID REFERENCES equipos (id),
-    estado VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (
+    evidencia_a_url text,
+    evidencia_b_url text,
+    ganador_id uuid REFERENCES equipos (id) ON DELETE RESTRICT,
+    estado text NOT NULL DEFAULT 'PENDIENTE' CHECK (
         estado IN (
             'PENDIENTE',
             'EN_JUEGO',
@@ -95,42 +101,41 @@ CREATE TABLE partidos (
             'CONFIRMADO'
         )
     ),
-    siguiente_partido_id UUID REFERENCES partidos (id),
-    slot_siguiente CHAR(1) CHECK (slot_siguiente IN ('A', 'B')),
-    version INT NOT NULL DEFAULT 1,
-    UNIQUE (
+    siguiente_partido_id uuid REFERENCES partidos (id) ON DELETE RESTRICT,
+    slot_siguiente char(1) CHECK (slot_siguiente IN ('A', 'B')),
+    version integer NOT NULL DEFAULT 0,
+    CONSTRAINT partidos_posicion_unica UNIQUE (
         torneo_id,
         ronda,
         posicion_en_ronda
     ),
-    CONSTRAINT chk_equipos_distintos CHECK (
-        equipo_a_id IS NULL
-        OR equipo_b_id IS NULL
-        OR equipo_a_id <> equipo_b_id
+    CONSTRAINT partidos_slot_con_siguiente CHECK (
+        (siguiente_partido_id IS NULL) = (slot_siguiente IS NULL)
     )
 );
 
-CREATE TABLE auditoria_arbitral (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-    partido_id UUID NOT NULL REFERENCES partidos (id) ON DELETE RESTRICT,
-    arbitro_id UUID NOT NULL REFERENCES usuarios (id),
-    accion VARCHAR(30) NOT NULL CHECK (
-        accion IN (
-            'RESOLUCION_DISPUTA',
-            'ANULACION_CASCADA'
-        )
-    ),
-    motivo TEXT NOT NULL,
-    estado_anterior JSONB NOT NULL,
-    fecha TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE INDEX IF NOT EXISTS idx_partidos_torneo ON partidos (torneo_id);
+
+CREATE INDEX IF NOT EXISTS idx_partidos_siguiente ON partidos (siguiente_partido_id);
+
+CREATE TABLE IF NOT EXISTS auditoria_arbitral (
+    id uuid PRIMARY KEY,
+    partido_id uuid NOT NULL REFERENCES partidos (id) ON DELETE RESTRICT,
+    arbitro_id uuid NOT NULL REFERENCES usuarios (id) ON DELETE RESTRICT,
+    accion text NOT NULL,
+    motivo text NOT NULL,
+    estado_anterior jsonb NOT NULL,
+    fecha timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE claves_idempotencia (
-    usuario_id UUID NOT NULL REFERENCES usuarios (id),
-    clave VARCHAR(255) NOT NULL,
-    huella_peticion VARCHAR(64) NOT NULL,
-    codigo_http INT NOT NULL,
-    cuerpo_respuesta JSONB NOT NULL,
-    creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+CREATE INDEX IF NOT EXISTS idx_auditoria_partido ON auditoria_arbitral (partido_id);
+
+CREATE TABLE IF NOT EXISTS claves_idempotencia (
+    usuario_id uuid NOT NULL REFERENCES usuarios (id) ON DELETE RESTRICT,
+    clave text NOT NULL,
+    huella_peticion text NOT NULL,
+    codigo_http integer NOT NULL,
+    cuerpo_respuesta jsonb NOT NULL,
+    creado_en timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (usuario_id, clave)
 );
