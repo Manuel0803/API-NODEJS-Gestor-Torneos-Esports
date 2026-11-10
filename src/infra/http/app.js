@@ -6,9 +6,16 @@ import {
   middlewareRutaNoEncontrada,
   manejadorErrores
 } from './middlewares/manejadorErrores.js';
+import { crearMiddlewareAutenticacion } from './middlewares/autenticacion.js';
+import { crearControladorAuth } from './controladores/auth.controlador.js';
+import { crearRutasAuth } from './rutas/auth.rutas.js';
+import { crearControladorTorneos } from './controladores/torneos.controlador.js';
+import { crearRutasTorneos } from './rutas/torneos.rutas.js';
 
 export function crearApp({
   corsOrigin = 'http://localhost:3000',
+  jwtSecret = 'super_secret_jwt_key_esports_2026',
+  dependencias = null,
   verificarDisponibilidad = async () => true,
   configurarRutas = null
 } = {}) {
@@ -34,6 +41,23 @@ export function crearApp({
       return res.status(503).json({ status: 'not_ready' });
     }
   });
+
+  if (dependencias) {
+    const verificarToken = crearMiddlewareAutenticacion(jwtSecret);
+
+    const controladorAuth = crearControladorAuth({
+      unidadDeTrabajo: dependencias.unidadDeTrabajo,
+      jwtSecret
+    });
+
+    const controladorTorneos = crearControladorTorneos({
+      unidadDeTrabajo: dependencias.unidadDeTrabajo,
+      casosDeUso: dependencias.casosDeUso
+    });
+
+    app.use('/auth', crearRutasAuth({ controladorAuth, verificarToken }));
+    app.use('/torneos', crearRutasTorneos({ controladorTorneos, verificarToken }));
+  }
 
   if (typeof configurarRutas === 'function') {
     configurarRutas(app);
