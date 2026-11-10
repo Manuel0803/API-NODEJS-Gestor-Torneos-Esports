@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { Torneo,ESTADOS_TORNEO } from '../../dominio/entidades/Torneo.js';
+import { Torneo } from '../../dominio/entidades/Torneo.js';
 import { Equipo } from '../../dominio/entidades/Equipo.js';
 import { Inscripcion } from '../../dominio/entidades/Inscripcion.js';
 import { Partido } from '../../dominio/entidades/Partido.js';
+import { Usuario } from '../../dominio/entidades/Usuario.js';
 
 class RepoMemoria {
   constructor(Entidad) {
@@ -23,14 +24,28 @@ class RepoMemoria {
 
 class RepoTorneoMemoria extends RepoMemoria {
   constructor() { super(Torneo); }
+  async listarTodos() {
+    return [...this.datos.values()].map((t) => this.copiar(t));
+  }
   async obtenerPorIdConBloqueo(id) {
     return this.obtenerPorId(id);
   }
-   async obtenerAbiertosConCheckinVencido(ahora) {
+  async obtenerAbiertosConCheckinVencido(ahora) {
     return [...this.datos.values()]
       .filter((t) => t.estado === 'ABIERTO' && t.finCheckin < ahora)
       .sort((a, b) => a.finCheckin - b.finCheckin)
       .map((t) => this.copiar(t));
+  }
+}
+
+class RepoUsuarioMemoria extends RepoMemoria {
+  constructor() { super(Usuario); }
+  async obtenerPorEmail(email) {
+    const normalizado = email.trim().toLowerCase();
+    const encontrado = [...this.datos.values()].find(
+      (u) => u.email.toLowerCase() === normalizado
+    );
+    return encontrado ? this.copiar(encontrado) : null;
   }
 }
 
@@ -94,10 +109,18 @@ export class UnidadDeTrabajoMemoria {
     this.inscripciones = new RepoInscripcionMemoria();
     this.partidos = new RepoPartidoMemoria();
     this.auditoria = new RepoAuditoriaMemoria();
+    this.usuarios = new RepoUsuarioMemoria();
   }
   
   async ejecutar(trabajo) {
-    const repos = [this.torneos, this.equipos, this.inscripciones, this.partidos, this.auditoria];
+    const repos = [
+      this.torneos,
+      this.equipos,
+      this.inscripciones,
+      this.partidos,
+      this.auditoria,
+      this.usuarios
+    ];
     const respaldo = repos.map((r) => new Map(r.datos));
     try {
       return await trabajo({
@@ -105,11 +128,16 @@ export class UnidadDeTrabajoMemoria {
         equipos: this.equipos,
         inscripciones: this.inscripciones,
         partidos: this.partidos,
-        auditoria: this.auditoria
+        auditoria: this.auditoria,
+        usuarios: this.usuarios
       });
     } catch (error) {
       repos.forEach((r, i) => { r.datos = respaldo[i]; });
       throw error;
     }
+  }
+
+  async listarTorneosCheckinVencido(ahora) {
+    return this.torneos.obtenerAbiertosConCheckinVencido(ahora);
   }
 }

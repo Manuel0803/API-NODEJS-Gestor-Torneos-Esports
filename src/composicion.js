@@ -1,4 +1,11 @@
 import { UnidadDeTrabajoMemoria } from './infra/memoria/UnidadDeTrabajoMemoria.js';
+import { UnidadDeTrabajoPg } from './infra/db/UnidadDeTrabajoPg.js';
+import {
+  crearPool,
+  verificarConexion,
+  esquemaAplicado,
+  cerrarPool
+} from './infra/db/pool.js';
 import { ProveedorIdentidadMemoria } from './infra/memoria/ProveedorIdentidadMemoria.js';
 import { AlmacenEvidenciasMemoria } from './infra/memoria/AlmacenEvidenciasMemoria.js';
 import { NotificadorMemoria } from './infra/memoria/NotificadorMemoria.js';
@@ -12,14 +19,45 @@ import { ResolverDisputa } from './dominio/casos-de-uso/ResolverDisputa.js';
 import { AnularPartido } from './dominio/casos-de-uso/AnularPartido.js';
 
 export function crearDependencias({
-  unidadDeTrabajo = new UnidadDeTrabajoMemoria(),
+  env = null,
+  usarMemoria = false,
+  unidadDeTrabajo: unidadDeTrabajoInyectada = null,
   proveedorIdentidad = new ProveedorIdentidadMemoria(),
   almacenEvidencias = new AlmacenEvidenciasMemoria(),
   notificador = new NotificadorMemoria(),
   reloj = new RelojSistema(),
-  verificarDisponibilidad = async () => true,
-  cerrarRecursos = async () => {}
+  verificarDisponibilidad: verificarDisponibilidadInyectada = null,
+  cerrarRecursos: cerrarRecursosInyectado = null
 } = {}) {
+  let pool = null;
+  let unidadDeTrabajo = unidadDeTrabajoInyectada;
+
+  if (!unidadDeTrabajo) {
+    if (env && !usarMemoria) {
+      pool = crearPool(env);
+      unidadDeTrabajo = new UnidadDeTrabajoPg(pool);
+    } else {
+      unidadDeTrabajo = new UnidadDeTrabajoMemoria();
+    }
+  }
+
+  const verificarDisponibilidad =
+    verificarDisponibilidadInyectada ??
+    (pool
+      ? async () => {
+          await verificarConexion(pool);
+          return esquemaAplicado(pool);
+        }
+      : async () => true);
+
+  const cerrarRecursos =
+    cerrarRecursosInyectado ??
+    (pool
+      ? async () => {
+          await cerrarPool(pool);
+        }
+      : async () => {});
+
   const casosDeUso = {
     crearTorneo: new CrearTorneo({ unidadDeTrabajo, reloj }),
     inscribirEquipo: new InscribirEquipo({
@@ -49,6 +87,7 @@ export function crearDependencias({
   };
 
   return {
+    pool,
     unidadDeTrabajo,
     proveedorIdentidad,
     almacenEvidencias,
@@ -59,4 +98,3 @@ export function crearDependencias({
     casosDeUso
   };
 }
-

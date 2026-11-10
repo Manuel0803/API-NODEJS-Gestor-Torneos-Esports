@@ -3,10 +3,17 @@ import { RepoEquipoPostgres } from './RepoEquipoPostgres.js';
 import { RepoInscripcionPostgres } from './RepoInscripcionPostgres.js';
 import { RepoPartidoPostgres } from './RepoPartidoPostgres.js';
 import { RepoAuditoriaPostgres } from './RepoAuditoriaPostgres.js';
+import { RepoUsuarioPostgres } from './RepoUsuarioPostgres.js';
 
 export class UnidadDeTrabajoPg {
   constructor(pool) {
     this.pool = pool;
+    this.torneos = new RepoTorneoPostgres(pool);
+    this.equipos = new RepoEquipoPostgres(pool);
+    this.inscripciones = new RepoInscripcionPostgres(pool);
+    this.partidos = new RepoPartidoPostgres(pool);
+    this.auditoria = new RepoAuditoriaPostgres(pool);
+    this.usuarios = new RepoUsuarioPostgres(pool);
   }
 
   async ejecutar(trabajo) {
@@ -19,6 +26,7 @@ export class UnidadDeTrabajoPg {
         inscripciones: new RepoInscripcionPostgres(cliente),
         partidos: new RepoPartidoPostgres(cliente),
         auditoria: new RepoAuditoriaPostgres(cliente),
+        usuarios: new RepoUsuarioPostgres(cliente),
       });
       await cliente.query('COMMIT');
       return resultado;

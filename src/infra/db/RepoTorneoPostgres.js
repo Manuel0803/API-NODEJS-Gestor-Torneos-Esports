@@ -10,6 +10,11 @@ export class RepoTorneoPostgres {
     if (res.rows.length === 0) return null;
     return this.#mapearEntidad(res.rows[0]);
   }
+
+  async listarTodos() {
+    const res = await this.db.query('SELECT * FROM torneos ORDER BY fecha_cierre_inscripcion ASC');
+    return res.rows.map((fila) => this.#mapearEntidad(fila));
+  }
   
   async obtenerPorIdConBloqueo(id) {
     const res = await this.db.query('SELECT * FROM torneos WHERE id = $1 FOR UPDATE', [id]);

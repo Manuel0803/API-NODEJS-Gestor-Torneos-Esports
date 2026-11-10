@@ -19,9 +19,9 @@ El Bloque 5 del contrato técnico exige:
 
 ## Opciones Consideradas
 
-### Opción 1: JSON Web Tokens (JWT) Stateless con algoritmo simétrico `HS256` y `bcrypt`
+### Opción 1: JSON Web Tokens (JWT) Stateless con algoritmo simétrico `HS256` y `argon2id`
 
-Al autenticarse en `POST /auth/login` (verificando el hash `bcrypt` con factor de costo `10`), el servidor emite un token firmado con `HS256` que contiene las claims estándar:
+Al autenticarse en `POST /auth/login` (verificando el hash `argon2id` con `memoryCost: 19456`, `timeCost: 2`, `parallelism: 1`), el servidor emite un token firmado con `HS256` que contiene las claims estándar:
 - `sub`: UUID del usuario autenticado.
 - `rol`: Rol del usuario (`ORGANIZADOR`, `ARBITRO`, `CAPITAN`, `JUGADOR`).
 - `iss`: Emisor esperado (`api-torneos-esports`).
@@ -51,7 +51,7 @@ Al iniciar sesión, el servidor inserta una fila en una tabla `sesiones` en Post
 
 ## Decisión
 
-Elegimos la **Opción 1: Autenticación stateless mediante JWT (`jsonwebtoken` con `HS256`, `iss`, `aud` y `exp`) combinada con `bcrypt` (factor de costo `SALT_ROUNDS = 10`)** para el hashing de contraseñas.
+Elegimos la **Opción 1: Autenticación stateless mediante JWT (`jsonwebtoken` con `HS256`, `iss`, `aud` y `exp`) combinada con `argon2` (`argon2id`, `memoryCost: 19456`, `timeCost: 2`, `parallelism: 1`)** para el hashing de contraseñas.
 
 ---
 
