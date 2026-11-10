@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ROLES_USUARIO } from '../../../dominio/entidades/Usuario.js';
+import { ROLES } from '../../../dominio/entidades/Usuario.js';
 
 export const esquemaRegistro = z
   .object({
@@ -8,10 +8,10 @@ export const esquemaRegistro = z
     nombreUsuario: z.string().min(3).max(100),
     gamerTag: z.string().min(2).max(100),
     rol: z.enum([
-      ROLES_USUARIO.ORGANIZADOR,
-      ROLES_USUARIO.ARBITRO,
-      ROLES_USUARIO.CAPITAN,
-      ROLES_USUARIO.JUGADOR
+      ROLES.ORGANIZADOR,
+      ROLES.ARBITRO,
+      ROLES.CAPITAN,
+      ROLES.JUGADOR
     ])
   })
   .strict();

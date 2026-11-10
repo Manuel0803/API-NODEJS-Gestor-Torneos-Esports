@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import argon2 from 'argon2';
 import { Usuario } from '../../../dominio/entidades/Usuario.js';
-import { ConflictoEstadoError } from '../../../dominio/errores/index.js';
+import { ReglaDeNegocioError } from '../../../dominio/errores/index.js';
 import { firmarToken } from '../middlewares/autenticacion.js';
 import { obtenerCorrelationId } from '../middlewares/contextoCorrelacion.js';
 
@@ -33,7 +33,7 @@ export function crearControladorAuth({ unidadDeTrabajo, jwtSecret }) {
         const usuarioCreado = await unidadDeTrabajo.ejecutar(async ({ usuarios }) => {
           const existente = await usuarios.obtenerPorEmail(email);
           if (existente) {
-            throw new ConflictoEstadoError('El email ingresado ya se encuentra registrado.');
+            throw new ReglaDeNegocioError('El email ingresado ya se encuentra registrado.');
           }
 
           const passwordHash = await argon2.hash(password, OPCIONES_ARGON2);

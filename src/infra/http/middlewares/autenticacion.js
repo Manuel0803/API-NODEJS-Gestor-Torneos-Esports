@@ -84,9 +84,11 @@ export function crearMiddlewareAutenticacion(jwtSecret) {
 
       req.usuario = {
         id: payload.sub,
+        sub: payload.sub,
         email: payload.email,
         rol: payload.rol
       };
+      req.user = req.usuario;
 
       return next();
     } catch {

@@ -2,52 +2,52 @@ import { ErrorDeDominio } from '../../../dominio/errores/index.js';
 import { obtenerCorrelationId, logger } from './contextoCorrelacion.js';
 
 const MAPA_ERRORES_DOMINIO = {
-  DATOS_INVALIDOS: {
+  ReporteInvalidoError: {
     status: 400,
     type: 'https://api.torneos.esports/errores/datos-invalidos',
     title: 'Datos de entrada invalidos'
   },
-  NO_AUTORIZADO: {
+  PermisoDenegadoError: {
     status: 403,
     type: 'https://api.torneos.esports/errores/no-autorizado',
     title: 'Operacion no autorizada'
   },
-  RECURSO_NO_ENCONTRADO: {
+  EntidadNoEncontradaError: {
     status: 404,
     type: 'https://api.torneos.esports/errores/recurso-no-encontrado',
     title: 'Recurso no encontrado'
   },
-  CONFLICTO_ESTADO: {
+  PartidoNoModificableError: {
     status: 409,
     type: 'https://api.torneos.esports/errores/conflicto-estado',
     title: 'Conflicto con el estado actual del recurso'
   },
-  CUPO_AGOTADO: {
+  ReglaDeNegocioError: {
+    status: 409,
+    type: 'https://api.torneos.esports/errores/conflicto-regla-negocio',
+    title: 'Violacion de regla de negocio'
+  },
+  CupoAgotadoError: {
     status: 409,
     type: 'https://api.torneos.esports/errores/cupo-agotado',
     title: 'Cupo del torneo agotado'
   },
-  JUGADOR_YA_INSCRIPTO: {
+  JugadorYaInscriptoError: {
     status: 409,
     type: 'https://api.torneos.esports/errores/jugador-ya-inscripto',
     title: 'Jugador ya inscripto en otro equipo del torneo'
   },
-  EQUIPO_YA_INSCRIPTO: {
-    status: 409,
-    type: 'https://api.torneos.esports/errores/equipo-ya-inscripto',
-    title: 'El equipo ya se encuentra inscripto en el torneo'
-  },
-  TORNEO_CERRADO: {
+  TorneoCerradoError: {
     status: 422,
     type: 'https://api.torneos.esports/errores/torneo-cerrado',
     title: 'El torneo no admite esta operacion en su estado actual'
   },
-  CHECKIN_FUERA_DE_VENTANA: {
+  CheckinFueraDeVentanaError: {
     status: 422,
     type: 'https://api.torneos.esports/errores/checkin-fuera-de-ventana',
     title: 'Operacion fuera de la ventana de check-in'
   },
-  SERVICIO_EXTERNO_NO_DISPONIBLE: {
+  ServicioExternoNoDisponibleError: {
     status: 503,
     type: 'https://api.torneos.esports/errores/servicio-externo-no-disponible',
     title: 'Servicio externo de validacion no disponible'
@@ -102,8 +102,9 @@ export function manejadorErrores(err, req, res, _next) {
     });
   }
 
-if (err instanceof ErrorDeDominio) {
-    const definicion = MAPA_ERRORES_DOMINIO[err.codigo] ?? {
+  if (err instanceof ErrorDeDominio) {
+    const claveError = err.codigo ?? err.name;
+    const definicion = MAPA_ERRORES_DOMINIO[claveError] ?? {
       status: 400,
       type: 'https://api.torneos.esports/errores/regla-de-negocio',
       title: 'Violacion de regla de negocio'
@@ -111,7 +112,7 @@ if (err instanceof ErrorDeDominio) {
 
     if (definicion.status >= 500) {
       logger.error('Fallo en dependencia externa (fail-closed)', {
-        codigo: err.codigo,
+        codigo: claveError,
         detalle: err.message,
         ruta: req.originalUrl
       });

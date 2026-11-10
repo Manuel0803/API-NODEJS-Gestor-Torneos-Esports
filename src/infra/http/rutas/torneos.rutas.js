@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { ROLES_USUARIO } from '../../../dominio/entidades/Usuario.js';
+import { ROLES } from '../../../dominio/entidades/Usuario.js';
 import { exigirRoles } from '../middlewares/autenticacion.js';
 import { validarEsquema } from '../middlewares/validarEsquema.js';
 import { crearRateLimiter } from '../middlewares/rateLimiter.js';
@@ -29,7 +29,7 @@ export function crearRutasTorneos({
   router.post(
     '/',
     verificarToken,
-    exigirRoles(ROLES_USUARIO.ORGANIZADOR),
+    exigirRoles(ROLES.ORGANIZADOR),
     validarEsquema({ body: esquemaCrearTorneo }),
     controladorTorneos.crear
   );
@@ -37,7 +37,7 @@ export function crearRutasTorneos({
   router.post(
     '/:id/inscripciones',
     verificarToken,
-    exigirRoles(ROLES_USUARIO.CAPITAN),
+    exigirRoles(ROLES.CAPITAN),
     validarEsquema({ params: esquemaParametroId, body: esquemaInscribirEquipo }),
     controladorTorneos.inscribir
   );
@@ -45,7 +45,7 @@ export function crearRutasTorneos({
   router.post(
     '/:id/checkin',
     verificarToken,
-    exigirRoles(ROLES_USUARIO.CAPITAN),
+    exigirRoles(ROLES.CAPITAN),
     validarEsquema({ params: esquemaParametroId, body: esquemaConfirmarCheckin }),
     controladorTorneos.confirmarCheckin
   );
@@ -54,7 +54,7 @@ export function crearRutasTorneos({
     '/:id/llave',
     limitadorLlave,
     verificarToken,
-    exigirRoles(ROLES_USUARIO.ORGANIZADOR),
+    exigirRoles(ROLES.ORGANIZADOR),
     validarEsquema({ params: esquemaParametroId }),
     controladorTorneos.armarLlave
   );

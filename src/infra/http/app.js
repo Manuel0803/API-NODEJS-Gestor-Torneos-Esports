@@ -6,11 +6,19 @@ import {
   middlewareRutaNoEncontrada,
   manejadorErrores
 } from './middlewares/manejadorErrores.js';
-import { crearMiddlewareAutenticacion } from './middlewares/autenticacion.js';
+import {
+  crearMiddlewareAutenticacion,
+  exigirRoles
+} from './middlewares/autenticacion.js';
+import { validarEsquema } from './middlewares/validarEsquema.js';
 import { crearControladorAuth } from './controladores/auth.controlador.js';
 import { crearRutasAuth } from './rutas/auth.rutas.js';
 import { crearControladorTorneos } from './controladores/torneos.controlador.js';
 import { crearRutasTorneos } from './rutas/torneos.rutas.js';
+import { crearControladorEquipos } from './controladores/equipos.controlador.js';
+import { crearRutasEquipos } from './rutas/equipos.rutas.js';
+import { crearControladorPartidos } from './controladores/partidos.controlador.js';
+import { crearRutasPartidos } from './rutas/partidos.rutas.js';
 
 export function crearApp({
   corsOrigin = 'http://localhost:3000',
@@ -55,8 +63,32 @@ export function crearApp({
       casosDeUso: dependencias.casosDeUso
     });
 
+    const controladorEquipos = crearControladorEquipos({
+      casosDeUso: dependencias.casosDeUso
+    });
+
+    const controladorPartidos = crearControladorPartidos({
+      casosDeUso: dependencias.casosDeUso
+    });
+
     app.use('/auth', crearRutasAuth({ controladorAuth, verificarToken }));
     app.use('/torneos', crearRutasTorneos({ controladorTorneos, verificarToken }));
+    app.use(
+      crearRutasEquipos({
+        controlador: controladorEquipos,
+        verificarToken,
+        exigirRoles,
+        validarEsquema
+      })
+    );
+    app.use(
+      crearRutasPartidos({
+        controlador: controladorPartidos,
+        verificarToken,
+        exigirRoles,
+        validarEsquema
+      })
+    );
   }
 
   if (typeof configurarRutas === 'function') {
