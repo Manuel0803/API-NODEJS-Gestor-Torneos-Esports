@@ -17,6 +17,14 @@ export class RepoPartidoPostgres {
     return this.#mapearEntidad(res.rows[0]);
   }
 
+  async obtenerPorTorneo(torneoId) {
+    const res = await this.db.query(
+      'SELECT * FROM partidos WHERE torneo_id = $1 ORDER BY ronda ASC, posicion_en_ronda ASC',
+      [torneoId],
+    );
+    return res.rows.map((fila) => this.#mapearEntidad(fila));
+  }
+
   async guardar(partido) {
     const query = `
       INSERT INTO partidos (

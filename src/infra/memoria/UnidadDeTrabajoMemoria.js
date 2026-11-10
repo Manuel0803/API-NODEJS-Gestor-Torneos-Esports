@@ -36,6 +36,15 @@ class RepoTorneoMemoria extends RepoMemoria {
 
 class RepoEquipoMemoria extends RepoMemoria {
   constructor() { super(Equipo); }
+  async obtenerPorNombre(nombre) {
+    const encontrado = [...this.datos.values()].find((e) => e.nombre === nombre);
+    return encontrado ? this.copiar(encontrado) : null;
+  }
+  async obtenerPorCapitan(capitanId) {
+    return [...this.datos.values()]
+      .filter((e) => e.capitanId === capitanId)
+      .map((e) => this.copiar(e));
+  }
 }
 
 class RepoInscripcionMemoria extends RepoMemoria {
@@ -53,6 +62,11 @@ class RepoInscripcionMemoria extends RepoMemoria {
   async obtenerPorTorneo(torneoId) {
     return [...this.datos.values()]
       .filter((i) => i.torneoId === torneoId)
+      .map((i) => this.copiar(i));
+  }
+  async obtenerPorJugador(jugadorId) {
+    return [...this.datos.values()]
+      .filter((i) => i.contieneJugador(jugadorId))
       .map((i) => this.copiar(i));
   }
 }

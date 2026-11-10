@@ -60,6 +60,17 @@ export class RepoInscripcionPostgres {
     return this.#mapearFilas(res.rows);
   }
 
+  async obtenerPorJugador(jugadorId) {
+    const res = await this.db.query(
+      `SELECT i.* FROM inscripciones i
+       JOIN inscripcion_jugadores ij ON ij.inscripcion_id = i.id
+       WHERE ij.jugador_id = $1
+       ORDER BY i.creado_en ASC`,
+      [jugadorId],
+    );
+    return this.#mapearFilas(res.rows);
+  }
+
   async #mapearFilas(filas) {
     if (filas.length === 0) return [];
     const ids = filas.map((fila) => fila.id);
