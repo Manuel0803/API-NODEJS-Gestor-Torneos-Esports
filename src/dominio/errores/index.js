@@ -63,3 +63,9 @@ export class ReglaDeNegocioError extends ErrorDeDominio {
     super(mensaje, detalles);
   }
 }
+
+export class ServicioExternoNoDisponibleError extends ErrorDeDominio {
+  constructor(servicio, motivo = 'El servicio externo no respondió a tiempo') {
+    super(`Servicio externo '${servicio}' no disponible: ${motivo}`, { servicio, motivo });
+  }
+}

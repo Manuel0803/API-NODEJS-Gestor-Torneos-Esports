@@ -21,6 +21,10 @@ describe('Entidad de Dominio: Usuario', () => {
     assert.equal(usuario.puntosElo, 1000);
     assert.equal(usuario.esCapitan(), true);
     assert.equal(usuario.esArbitro(), false);
+    assert.ok(usuario.creadoEn instanceof Date);
+
+    const conStringDate = new Usuario({ ...usuarioBase, creadoEn: '2026-10-26T14:49:59Z' });
+    assert.ok(conStringDate.creadoEn instanceof Date);
   });
 
   it('rechaza roles no permitidos', () => {
@@ -61,5 +65,29 @@ describe('Entidad de Dominio: Usuario', () => {
       () => usuario.actualizarElo(-50),
       ReglaDeNegocioError
     );
+  });
+
+  it('actualiza el gamerTag correctamente y hace trim', () => {
+    const usuario = new Usuario(usuarioBase);
+    usuario.actualizarGamerTag('  Faker_God  ');
+
+    assert.equal(usuario.gamerTag, 'Faker_God');
+  });
+
+  it('rechaza gamerTag vacío o inválido', () => {
+    const usuario = new Usuario(usuarioBase);
+
+    assert.throws(() => usuario.actualizarGamerTag(''), ReglaDeNegocioError);
+    assert.throws(() => usuario.actualizarGamerTag('   '), ReglaDeNegocioError);
+    assert.throws(() => usuario.actualizarGamerTag(null), ReglaDeNegocioError);
+  });
+
+  it('rechaza campos obligatorios faltantes en constructor', () => {
+    assert.throws(() => new Usuario({ ...usuarioBase, id: null }), ReglaDeNegocioError);
+    assert.throws(() => new Usuario({ ...usuarioBase, email: '' }), ReglaDeNegocioError);
+    assert.throws(() => new Usuario({ ...usuarioBase, passwordHash: null }), ReglaDeNegocioError);
+    assert.throws(() => new Usuario({ ...usuarioBase, nombreUsuario: '' }), ReglaDeNegocioError);
+    assert.throws(() => new Usuario({ ...usuarioBase, gamerTag: '' }), ReglaDeNegocioError);
+    assert.throws(() => new Usuario({ ...usuarioBase, rol: null }), ReglaDeNegocioError);
   });
 });
