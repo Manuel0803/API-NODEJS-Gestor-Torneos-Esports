@@ -13,6 +13,7 @@ import {
 export function crearRutasTorneos({
   controladorTorneos,
   verificarToken,
+  middlewareIdempotencia = (_req, _res, next) => next(),
   maxPeticionesLlave = 5,
   ventanaLlaveMs = 60 * 1000
 }) {
@@ -31,6 +32,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.ORGANIZADOR),
     validarEsquema({ body: esquemaCrearTorneo }),
+    middlewareIdempotencia,
     controladorTorneos.crear
   );
 
@@ -39,6 +41,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.CAPITAN),
     validarEsquema({ params: esquemaParametroId, body: esquemaInscribirEquipo }),
+    middlewareIdempotencia,
     controladorTorneos.inscribir
   );
 
@@ -47,6 +50,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.CAPITAN),
     validarEsquema({ params: esquemaParametroId, body: esquemaConfirmarCheckin }),
+    middlewareIdempotencia,
     controladorTorneos.confirmarCheckin
   );
 
@@ -56,6 +60,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.ORGANIZADOR),
     validarEsquema({ params: esquemaParametroId }),
+    middlewareIdempotencia,
     controladorTorneos.armarLlave
   );
 

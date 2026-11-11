@@ -5,7 +5,13 @@ import {
   esquemaAgendaJugador
 } from '../esquemas/equipos.esquema.js';
 
-export function crearRutasEquipos({ controlador, verificarToken, exigirRoles, validarEsquema }) {
+export function crearRutasEquipos({
+  controlador,
+  verificarToken,
+  exigirRoles,
+  validarEsquema,
+  middlewareIdempotencia = (_req, _res, next) => next()
+}) {
   const router = Router();
 
   router.post(
@@ -13,6 +19,7 @@ export function crearRutasEquipos({ controlador, verificarToken, exigirRoles, va
     verificarToken,
     exigirRoles('CAPITAN'),
     validarEsquema(esquemaCrearEquipo),
+    middlewareIdempotencia,
     controlador.crear
   );
 

@@ -5,7 +5,13 @@ import {
   esquemaAnularPartido
 } from '../esquemas/partidos.esquema.js';
 
-export function crearRutasPartidos({ controlador, verificarToken, exigirRoles, validarEsquema }) {
+export function crearRutasPartidos({
+  controlador,
+  verificarToken,
+  exigirRoles,
+  validarEsquema,
+  middlewareIdempotencia = (_req, _res, next) => next()
+}) {
   const router = Router();
 
   router.post(
@@ -13,6 +19,7 @@ export function crearRutasPartidos({ controlador, verificarToken, exigirRoles, v
     verificarToken,
     exigirRoles('CAPITAN'),
     validarEsquema(esquemaReportarResultado),
+    middlewareIdempotencia,
     controlador.reportar
   );
 
@@ -21,6 +28,7 @@ export function crearRutasPartidos({ controlador, verificarToken, exigirRoles, v
     verificarToken,
     exigirRoles('ARBITRO'),
     validarEsquema(esquemaResolverDisputa),
+    middlewareIdempotencia,
     controlador.resolverDisputa
   );
 
@@ -29,6 +37,7 @@ export function crearRutasPartidos({ controlador, verificarToken, exigirRoles, v
     verificarToken,
     exigirRoles('ARBITRO'),
     validarEsquema(esquemaAnularPartido),
+    middlewareIdempotencia,
     controlador.anular
   );
 

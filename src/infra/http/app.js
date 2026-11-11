@@ -10,7 +10,11 @@ import {
   crearMiddlewareAutenticacion,
   exigirRoles
 } from './middlewares/autenticacion.js';
-import { validarEsquema } from './middlewares/validarEsquema.js';
+import {
+  validarEsquema,
+  rechazarContaminacionPrototipo
+} from './middlewares/validarEsquema.js';
+import { crearMiddlewareIdempotencia } from './middlewares/idempotencia.js';
 import { crearControladorAuth } from './controladores/auth.controlador.js';
 import { crearRutasAuth } from './rutas/auth.rutas.js';
 import { crearControladorTorneos } from './controladores/torneos.controlador.js';
@@ -33,6 +37,7 @@ export function crearApp({
   app.use(helmet());
   app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
+  app.use(rechazarContaminacionPrototipo);
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok' });
@@ -52,6 +57,9 @@ export function crearApp({
 
   if (dependencias) {
     const verificarToken = crearMiddlewareAutenticacion(jwtSecret);
+    const middlewareIdempotencia = crearMiddlewareIdempotencia({
+      unidadDeTrabajo: dependencias.unidadDeTrabajo
+    });
 
     const controladorAuth = crearControladorAuth({
       unidadDeTrabajo: dependencias.unidadDeTrabajo,
@@ -72,13 +80,21 @@ export function crearApp({
     });
 
     app.use('/auth', crearRutasAuth({ controladorAuth, verificarToken }));
-    app.use('/torneos', crearRutasTorneos({ controladorTorneos, verificarToken }));
+    app.use(
+      '/torneos',
+      crearRutasTorneos({
+        controladorTorneos,
+        verificarToken,
+        middlewareIdempotencia
+      })
+    );
     app.use(
       crearRutasEquipos({
         controlador: controladorEquipos,
         verificarToken,
         exigirRoles,
-        validarEsquema
+        validarEsquema,
+        middlewareIdempotencia
       })
     );
     app.use(
@@ -86,7 +102,8 @@ export function crearApp({
         controlador: controladorPartidos,
         verificarToken,
         exigirRoles,
-        validarEsquema
+        validarEsquema,
+        middlewareIdempotencia
       })
     );
   }
