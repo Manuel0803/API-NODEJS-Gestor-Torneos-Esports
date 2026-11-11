@@ -116,6 +116,28 @@ class RepoAuditoriaMemoria {
   }
 }
 
+class RepoIdempotenciaMemoria {
+  constructor() {
+    this.datos = new Map();
+  }
+  async obtener(usuarioId, clave) {
+    return this.datos.get(`${usuarioId}:${clave}`) ?? null;
+  }
+  async guardar({ usuarioId, clave, huellaPeticion, codigoHttp, cuerpoRespuesta }) {
+    const llave = `${usuarioId}:${clave}`;
+    if (!this.datos.has(llave)) {
+      this.datos.set(llave, {
+        usuarioId,
+        clave,
+        huellaPeticion,
+        codigoHttp,
+        cuerpoRespuesta: structuredClone(cuerpoRespuesta),
+        creadoEn: new Date()
+      });
+    }
+  }
+}
+
 export class UnidadDeTrabajoMemoria {
   constructor() {
     this.torneos = new RepoTorneoMemoria();
@@ -124,6 +146,7 @@ export class UnidadDeTrabajoMemoria {
     this.partidos = new RepoPartidoMemoria();
     this.auditoria = new RepoAuditoriaMemoria();
     this.usuarios = new RepoUsuarioMemoria();
+    this.clavesIdempotencia = new RepoIdempotenciaMemoria();
   }
   
   async ejecutar(trabajo) {
