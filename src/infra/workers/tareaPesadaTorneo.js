@@ -99,7 +99,7 @@ export function ejecutarSimulacionMasiva({
     ordenInscripcion: indice + 1
   }));
 
-  const partidos = torneo.generarLlaveEliminacionSimple(confirmados);
+  const partidos = torneo.generarEstructuraLlave(confirmados);
   const inicioCalendarioMs = Date.parse('2026-01-02T15:00:00Z');
 
   const calendario = partidos.map((partido) => ({
