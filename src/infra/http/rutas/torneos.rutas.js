@@ -7,7 +7,8 @@ import {
   esquemaParametroId,
   esquemaCrearTorneo,
   esquemaInscribirEquipo,
-  esquemaConfirmarCheckin
+  esquemaConfirmarCheckin,
+  esquemaSimulacionMasiva
 } from '../esquemas/torneos.esquema.js';
 
 export function crearRutasTorneos({
@@ -68,6 +69,15 @@ export function crearRutasTorneos({
     '/:id/llave-publica',
     validarEsquema({ params: esquemaParametroId }),
     controladorTorneos.obtenerLlavePublica
+  );
+
+  router.post(
+    '/simulacion-masiva',
+    limitadorLlave,
+    verificarToken,
+    exigirRoles(ROLES.ORGANIZADOR),
+    validarEsquema({ body: esquemaSimulacionMasiva }),
+    controladorTorneos.simularLlaveMasivaYElo
   );
 
   return router;

@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { middlewareCorrelacion } from './middlewares/contextoCorrelacion.js';
+import { crearMonitorEventLoop } from './middlewares/monitorEventLoop.js';
 import {
   middlewareRutaNoEncontrada,
   manejadorErrores
@@ -32,15 +33,20 @@ export function crearApp({
   configurarRutas = null
 } = {}) {
   const app = express();
+  const monitorLoop = crearMonitorEventLoop();
+  app.locals.monitorEventLoop = monitorLoop;
 
   app.use(middlewareCorrelacion);
   app.use(helmet());
   app.use(cors({ origin: corsOrigin }));
-  app.use(express.json());
+  app.use(express.json({ limit: '100kb' }));
   app.use(rechazarContaminacionPrototipo);
 
   app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
+    res.status(200).json({
+      status: 'ok',
+      eventLoopLagMs: monitorLoop.obtenerMetricas()
+    });
   });
 
   app.get('/ready', async (_req, res) => {
