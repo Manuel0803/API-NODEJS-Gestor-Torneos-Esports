@@ -4,6 +4,7 @@ import { RepoInscripcionPostgres } from './RepoInscripcionPostgres.js';
 import { RepoPartidoPostgres } from './RepoPartidoPostgres.js';
 import { RepoAuditoriaPostgres } from './RepoAuditoriaPostgres.js';
 import { RepoUsuarioPostgres } from './RepoUsuarioPostgres.js';
+import { RepoIdempotenciaPostgres } from './RepoIdempotenciaPostgres.js';
 
 export class UnidadDeTrabajoPg {
   constructor(pool) {
@@ -14,6 +15,7 @@ export class UnidadDeTrabajoPg {
     this.partidos = new RepoPartidoPostgres(pool);
     this.auditoria = new RepoAuditoriaPostgres(pool);
     this.usuarios = new RepoUsuarioPostgres(pool);
+    this.clavesIdempotencia = new RepoIdempotenciaPostgres(pool);
   }
 
   async ejecutar(trabajo) {
