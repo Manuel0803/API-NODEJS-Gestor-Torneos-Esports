@@ -32,6 +32,7 @@ export function iniciarServidor({
   const app = crearApp({
     corsOrigin: env.CORS_ORIGIN,
     jwtSecret: env.JWT_SECRET,
+    internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     dependencias,
     verificarDisponibilidad: dependencias.verificarDisponibilidad
   });

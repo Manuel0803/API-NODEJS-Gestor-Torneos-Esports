@@ -18,10 +18,11 @@ function esUrlHttp(valor) {
 }
 
 export class AlmacenEvidenciasHttp extends PuertoAlmacenEvidencias {
-  constructor({ baseUrl, timeoutMs, fetchFn = fetch }) {
+  constructor({ baseUrl, timeoutMs, serviceToken = '', fetchFn = fetch }) {
     super();
     this.baseUrl = normalizarBaseUrl(baseUrl);
     this.timeoutMs = timeoutMs;
+    this.serviceToken = serviceToken;
     this.fetchFn = fetchFn;
   }
 
@@ -36,6 +37,7 @@ export class AlmacenEvidenciasHttp extends PuertoAlmacenEvidencias {
       cuerpo: { partidoId, equipoId, evidenciaUrl: evidenciaUrl.trim() },
       timeoutMs: this.timeoutMs,
       servicio: SERVICIO,
+      serviceToken: this.serviceToken,
     });
 
     if (status === 400 || status === 422) {

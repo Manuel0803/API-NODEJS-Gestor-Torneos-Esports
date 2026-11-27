@@ -10,6 +10,7 @@ const esquemaEnv = z.object({
   DB_NAME: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   CORS_ORIGIN: z.string().min(1),
+  INTERNAL_SERVICE_SECRET: z.string().min(1).default('dev-internal-service-secret'),
   EXTERNAL_ADAPTER_MODE: z.enum(['mock', 'http']).default('mock'),
   DJANGO_SERVICE_URL: z.string().url(),
   DJANGO_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),

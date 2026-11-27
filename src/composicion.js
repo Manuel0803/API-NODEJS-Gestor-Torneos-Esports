@@ -54,7 +54,8 @@ export function crearDependencias({
     (usarModoHttp
       ? new ProveedorIdentidadHttp({
           baseUrl: env.DJANGO_SERVICE_URL,
-          timeoutMs: env.DJANGO_SERVICE_TIMEOUT_MS
+          timeoutMs: env.DJANGO_SERVICE_TIMEOUT_MS,
+          serviceToken: env.INTERNAL_SERVICE_SECRET
         })
       : new ProveedorIdentidadMemoria());
 
@@ -63,7 +64,8 @@ export function crearDependencias({
     (usarModoHttp
       ? new AlmacenEvidenciasHttp({
           baseUrl: env.DJANGO_SERVICE_URL,
-          timeoutMs: env.DJANGO_SERVICE_TIMEOUT_MS
+          timeoutMs: env.DJANGO_SERVICE_TIMEOUT_MS,
+          serviceToken: env.INTERNAL_SERVICE_SECRET
         })
       : new AlmacenEvidenciasMemoria());
 

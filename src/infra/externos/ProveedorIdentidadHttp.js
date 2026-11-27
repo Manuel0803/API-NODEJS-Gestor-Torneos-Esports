@@ -8,10 +8,11 @@ import { postJson, normalizarBaseUrl } from './clienteHttpJson.js';
 const SERVICIO = 'ProveedorIdentidadDjango';
 
 export class ProveedorIdentidadHttp extends PuertoProveedorIdentidad {
-  constructor({ baseUrl, timeoutMs, fetchFn = fetch }) {
+  constructor({ baseUrl, timeoutMs, serviceToken = '', fetchFn = fetch }) {
     super();
     this.baseUrl = normalizarBaseUrl(baseUrl);
     this.timeoutMs = timeoutMs;
+    this.serviceToken = serviceToken;
     this.fetchFn = fetchFn;
   }
 
@@ -22,6 +23,7 @@ export class ProveedorIdentidadHttp extends PuertoProveedorIdentidad {
       cuerpo: { jugadoresIds },
       timeoutMs: this.timeoutMs,
       servicio: SERVICIO,
+      serviceToken: this.serviceToken,
     });
 
     if (status !== 200 || !Array.isArray(datos?.invalidos)) {

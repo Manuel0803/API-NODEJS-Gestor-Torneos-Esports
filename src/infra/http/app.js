@@ -24,10 +24,25 @@ import { crearControladorEquipos } from './controladores/equipos.controlador.js'
 import { crearRutasEquipos } from './rutas/equipos.rutas.js';
 import { crearControladorPartidos } from './controladores/partidos.controlador.js';
 import { crearRutasPartidos } from './rutas/partidos.rutas.js';
+import { crearRutasIntegracion } from './rutas/integracion.rutas.js';
+
+function normalizarOrigenesCors(corsOrigin) {
+  if (Array.isArray(corsOrigin)) {
+    return corsOrigin;
+  }
+  if (typeof corsOrigin === 'string' && corsOrigin.includes(',')) {
+    return corsOrigin
+      .split(',')
+      .map((origen) => origen.trim())
+      .filter(Boolean);
+  }
+  return corsOrigin;
+}
 
 export function crearApp({
-  corsOrigin = 'http://localhost:3000',
+  corsOrigin = 'http://localhost:3000,http://localhost:5173',
   jwtSecret = 'super_secret_jwt_key_esports_2026',
+  internalServiceSecret = 'dev-internal-service-secret',
   dependencias = null,
   verificarDisponibilidad = async () => true,
   configurarRutas = null
@@ -38,9 +53,11 @@ export function crearApp({
 
   app.use(middlewareCorrelacion);
   app.use(helmet());
-  app.use(cors({ origin: corsOrigin }));
+  app.use(cors({ origin: normalizarOrigenesCors(corsOrigin) }));
   app.use(express.json({ limit: '100kb' }));
   app.use(rechazarContaminacionPrototipo);
+
+  app.use('/api/integracion', crearRutasIntegracion({ internalServiceSecret }));
 
   app.get('/health', (_req, res) => {
     res.status(200).json({
