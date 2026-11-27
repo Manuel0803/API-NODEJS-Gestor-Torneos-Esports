@@ -1,4 +1,8 @@
 import { EntidadNoEncontradaError } from '../../../dominio/errores/index.js';
+import {
+  ejecutarSimulacionMasiva,
+  ejecutarSimulacionEnWorker
+} from '../../workers/tareaPesadaTorneo.js';
 
 function serializarTorneo(torneo) {
   return {
@@ -163,6 +167,37 @@ export function crearControladorTorneos({ unidadDeTrabajo, casosDeUso }) {
           partidos: partidosOrdenados.map((partido) =>
             serializarPartidoPublico(partido, mapaNombresEquipos)
           )
+        });
+      } catch (error) {
+        return next(error);
+      }
+    },
+
+    async simularLlaveMasivaYElo(req, res, next) {
+      try {
+        const {
+          modo,
+          cantidadEquipos,
+          cantidadJugadoresElo,
+          rondasHistoricas,
+          semilla
+        } = req.body;
+
+        const parametros = {
+          cantidadEquipos,
+          cantidadJugadoresElo,
+          rondasHistoricas,
+          semilla
+        };
+
+        const resultado =
+          modo === 'ingenuo'
+            ? ejecutarSimulacionMasiva(parametros)
+            : await ejecutarSimulacionEnWorker(parametros);
+
+        return res.status(200).json({
+          modoEjecucion: modo,
+          ...resultado
         });
       } catch (error) {
         return next(error);

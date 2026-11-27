@@ -1,0 +1,251 @@
+@host = http://localhost:3000
+@password = pinocchio
+
+### ============================================================
+### 0. Sesiones de los usuarios de prueba (creados por npm run setup)
+### SEED_PASSWORD del .env debe coincidir con @password
+### ============================================================
+
+# @name loginOrganizador
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "organizador@torneos.test", "password": "{{password}}" }
+
+###
+
+# @name loginArbitro
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "arbitro@torneos.test", "password": "{{password}}" }
+
+###
+
+# @name loginCapitan
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{ "email": "capitan@torneos.test", "password": "{{password}}" }
+
+###
+
+@tokenOrganizador = {{loginOrganizador.response.body.accessToken}}
+@tokenArbitro = {{loginArbitro.response.body.accessToken}}
+@tokenCapitan = {{loginCapitan.response.body.accessToken}}
+
+### ============================================================
+### 1. Creacion de torneo e inscripcion concurrente de 50 equipos sobre 10 cupos
+### La inscripcion concurrente se ejecuta con el test:
+###   node --test tests/integracion/postgres-carrera-inscripciones.test.js
+### ============================================================
+
+# @name crearTorneo
+POST {{host}}/torneos
+Authorization: Bearer {{tokenOrganizador}}
+Idempotency-Key: demo-torneo-001
+Content-Type: application/json
+
+{
+  "nombre": "Copa Demo",
+  "juego": "League of Legends",
+  "cupoMaximo": 10,
+  "tamanoEquipo": 1,
+  "semillaSorteo": "semilla-demo",
+  "fechaCierreInscripcion": "2030-01-01T00:00:00Z",
+  "inicioCheckin": "2030-01-02T00:00:00Z",
+  "finCheckin": "2030-01-02T01:00:00Z"
+}
+
+###
+
+@torneoId = {{crearTorneo.response.body.id}}
+
+### Mismo pedido con la misma Idempotency-Key: devuelve el resultado guardado
+### y el encabezado Idempotent-Replayed: true, sin crear otro torneo
+
+POST {{host}}/torneos
+Authorization: Bearer {{tokenOrganizador}}
+Idempotency-Key: demo-torneo-001
+Content-Type: application/json
+
+{
+  "nombre": "Copa Demo",
+  "juego": "League of Legends",
+  "cupoMaximo": 10,
+  "tamanoEquipo": 1,
+  "semillaSorteo": "semilla-demo",
+  "fechaCierreInscripcion": "2030-01-01T00:00:00Z",
+  "inicioCheckin": "2030-01-02T00:00:00Z",
+  "finCheckin": "2030-01-02T01:00:00Z"
+}
+
+###
+
+# @name crearEquipo
+POST {{host}}/equipos
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-equipo-001
+Content-Type: application/json
+
+{ "nombre": "Equipo Demo Uno" }
+
+###
+
+@equipoId = {{crearEquipo.response.body.id}}
+@jugadorId = {{loginCapitan.response.body.usuario.id}}
+
+# @name inscribir
+POST {{host}}/torneos/{{torneoId}}/inscripciones
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-inscripcion-001
+Content-Type: application/json
+
+{ "equipoId": "{{equipoId}}", "jugadorIds": ["{{jugadorId}}"] }
+
+###
+
+GET {{host}}/torneos
+
+### ============================================================
+### 2. Llave de 13 participantes con descansos (byes)
+### Test de dominio que arma la llave de 13 y verifica los byes:
+###   node --test tests/dominio
+### Armado real: cerrar check-in y generar la llave
+### ============================================================
+
+# @name armarLlave
+POST {{host}}/torneos/{{torneoId}}/llave
+Authorization: Bearer {{tokenOrganizador}}
+Idempotency-Key: demo-llave-001
+
+###
+
+GET {{host}}/torneos/{{torneoId}}/llave-publica
+
+### ============================================================
+### 3. Ventana de check-in: confirmacion y vencimiento (derrota por W.O.)
+### Dentro de la ventana el capitan confirma presencia
+### ============================================================
+
+POST {{host}}/torneos/{{torneoId}}/checkin
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-checkin-001
+Content-Type: application/json
+
+{ "equipoId": "{{equipoId}}" }
+
+### Quien no confirma al vencer la ventana pasa a ELIMINADO_WO.
+### El job periodico (cada 30 s) cierra los torneos vencidos y arma la llave sin intervencion.
+### Test: node --test tests/dominio/torneos-checkin-vencido.test.js
+
+### ============================================================
+### 4. Reportes coincidentes y contradictorios, y resolucion arbitral
+### Reemplazar partidoId por un partido EN_JUEGO de la llave
+### ============================================================
+
+@partidoId = 00000000-0000-0000-0000-000000000000
+@equipoAId = 00000000-0000-0000-0000-000000000000
+@equipoBId = 00000000-0000-0000-0000-000000000000
+
+# Reporte del equipo A
+POST {{host}}/partidos/{{partidoId}}/reportes
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-reporte-a-001
+Content-Type: application/json
+
+{ "equipoId": "{{equipoAId}}", "resultado": "GANA_A" }
+
+###
+
+# Reporte del equipo B: si coincide (GANA_A) se confirma; si contradice (GANA_B) queda EN_DISPUTA
+POST {{host}}/partidos/{{partidoId}}/reportes
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-reporte-b-001
+Content-Type: application/json
+
+{ "equipoId": "{{equipoBId}}", "resultado": "GANA_B" }
+
+###
+
+# Resolucion del arbitro (solo sobre un partido EN_DISPUTA)
+POST {{host}}/partidos/{{partidoId}}/resolver-disputa
+Authorization: Bearer {{tokenArbitro}}
+Idempotency-Key: demo-resolucion-001
+Content-Type: application/json
+
+{ "ganadorId": "{{equipoAId}}", "motivo": "Revision de la evidencia adjunta" }
+
+### Carrera de reportes contra resolucion arbitral:
+###   node --test tests/concurrencia/postgres-carrera-partidos.test.js
+
+### ============================================================
+### 5. Anulacion de un partido confirmado y reversion en cascada
+### ============================================================
+
+POST {{host}}/partidos/{{partidoId}}/anular
+Authorization: Bearer {{tokenArbitro}}
+Idempotency-Key: demo-anulacion-001
+Content-Type: application/json
+
+{ "resolucion": "REJUGAR", "motivo": "Error en la carga del resultado" }
+
+###
+
+POST {{host}}/partidos/{{partidoId}}/anular
+Authorization: Bearer {{tokenArbitro}}
+Idempotency-Key: demo-anulacion-002
+Content-Type: application/json
+
+{ "resolucion": "VICTORIA_ADMINISTRATIVA", "ganadorId": "{{equipoBId}}", "motivo": "Sancion por conducta antideportiva" }
+
+### ============================================================
+### 6. Llave publica: no expone correos ni datos personales
+### Test de campos devueltos por el endpoint publico
+### ============================================================
+
+GET {{host}}/torneos/{{torneoId}}/llave-publica
+
+### ============================================================
+### 7. Llave de 1024 participantes con medicion antes y despues
+### Ver comandos exactos en docs/mediciones.md
+### ============================================================
+
+### ============================================================
+### Controles de seguridad extra
+### ============================================================
+
+# Sin token: 401
+POST {{host}}/equipos
+Content-Type: application/json
+
+{ "nombre": "Sin token" }
+
+###
+
+# Campo no declarado: se rechaza
+POST {{host}}/equipos
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-extra-001
+Content-Type: application/json
+
+{ "nombre": "Equipo extra", "rol": "ORGANIZADOR" }
+
+###
+
+# Prototype pollution: se rechaza
+POST {{host}}/equipos
+Authorization: Bearer {{tokenCapitan}}
+Idempotency-Key: demo-extra-002
+Content-Type: application/json
+
+{ "nombre": "Equipo pp", "__proto__": { "admin": true } }
+
+###
+
+# Rol insuficiente (capitan intenta crear torneo): 403
+POST {{host}}/torneos
+Authorization: Bearer {{tokenCapitan}}
+Content-Type: application/json
+
+{}

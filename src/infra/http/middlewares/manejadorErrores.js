@@ -78,6 +78,15 @@ export function middlewareRutaNoEncontrada(req, res) {
 }
 
 export function manejadorErrores(err, req, res, _next) {
+  if (err?.type === 'entity.too.large') {
+    return responderProblema(res, req, {
+      status: 413,
+      type: 'https://api.torneos.esports/errores/carga-demasiado-grande',
+      title: 'Carga demasiado grande',
+      detail: 'El tamano del cuerpo de la peticion supera el limite permitido.'
+    });
+  }
+
   if (err?.type === 'entity.parse.failed') {
     return responderProblema(res, req, {
       status: 400,

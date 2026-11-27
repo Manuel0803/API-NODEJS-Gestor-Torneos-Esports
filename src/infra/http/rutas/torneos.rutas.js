@@ -7,12 +7,14 @@ import {
   esquemaParametroId,
   esquemaCrearTorneo,
   esquemaInscribirEquipo,
-  esquemaConfirmarCheckin
+  esquemaConfirmarCheckin,
+  esquemaSimulacionMasiva
 } from '../esquemas/torneos.esquema.js';
 
 export function crearRutasTorneos({
   controladorTorneos,
   verificarToken,
+  middlewareIdempotencia = (_req, _res, next) => next(),
   maxPeticionesLlave = 5,
   ventanaLlaveMs = 60 * 1000
 }) {
@@ -31,6 +33,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.ORGANIZADOR),
     validarEsquema({ body: esquemaCrearTorneo }),
+    middlewareIdempotencia,
     controladorTorneos.crear
   );
 
@@ -39,6 +42,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.CAPITAN),
     validarEsquema({ params: esquemaParametroId, body: esquemaInscribirEquipo }),
+    middlewareIdempotencia,
     controladorTorneos.inscribir
   );
 
@@ -47,6 +51,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.CAPITAN),
     validarEsquema({ params: esquemaParametroId, body: esquemaConfirmarCheckin }),
+    middlewareIdempotencia,
     controladorTorneos.confirmarCheckin
   );
 
@@ -56,6 +61,7 @@ export function crearRutasTorneos({
     verificarToken,
     exigirRoles(ROLES.ORGANIZADOR),
     validarEsquema({ params: esquemaParametroId }),
+    middlewareIdempotencia,
     controladorTorneos.armarLlave
   );
 
@@ -63,6 +69,15 @@ export function crearRutasTorneos({
     '/:id/llave-publica',
     validarEsquema({ params: esquemaParametroId }),
     controladorTorneos.obtenerLlavePublica
+  );
+
+  router.post(
+    '/simulacion-masiva',
+    limitadorLlave,
+    verificarToken,
+    exigirRoles(ROLES.ORGANIZADOR),
+    validarEsquema({ body: esquemaSimulacionMasiva }),
+    controladorTorneos.simularLlaveMasivaYElo
   );
 
   return router;

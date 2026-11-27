@@ -32,3 +32,13 @@ export const esquemaConfirmarCheckin = z
   })
   .strict();
 
+export const esquemaSimulacionMasiva = z
+  .object({
+    modo: z.enum(['ingenuo', 'worker']).default('worker'),
+    cantidadEquipos: z.number().int().min(1024).max(4096).default(1024),
+    cantidadJugadoresElo: z.number().int().min(1000).max(20000).default(5000),
+    rondasHistoricas: z.number().int().min(10).max(500).default(120),
+    semilla: z.string().min(1).max(100).default('torneo-masivo-1024')
+  })
+  .strict();
+

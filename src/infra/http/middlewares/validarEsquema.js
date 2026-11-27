@@ -33,6 +33,26 @@ export const esquemaObjetoSeguro = z.custom(
   }
 );
 
+export function rechazarContaminacionPrototipo(req, res, next) {
+  if (
+    contieneClavesDePrototipo(req.body) ||
+    contieneClavesDePrototipo(req.params) ||
+    contieneClavesDePrototipo(req.query)
+  ) {
+    const correlationId = obtenerCorrelationId();
+    return res.status(400).type('application/problem+json').json({
+      type: 'https://api.torneos.esports/errores/datos-invalidos',
+      title: 'Datos de entrada invalidos',
+      status: 400,
+      detail: 'La estructura de la peticion contiene propiedades no permitidas.',
+      instance: req.originalUrl,
+      ...(correlationId ? { correlationId } : {})
+    });
+  }
+
+  return next();
+}
+
 export function validarEsquema({ body, params, query } = {}) {
   return function middlewareValidacion(req, res, next) {
     if (
@@ -40,15 +60,7 @@ export function validarEsquema({ body, params, query } = {}) {
       contieneClavesDePrototipo(req.params) ||
       contieneClavesDePrototipo(req.query)
     ) {
-      const correlationId = obtenerCorrelationId();
-      return res.status(400).type('application/problem+json').json({
-        type: 'https://api.torneos.esports/errores/datos-invalidos',
-        title: 'Datos de entrada invalidos',
-        status: 400,
-        detail: 'La estructura de la peticion contiene propiedades no permitidas.',
-        instance: req.originalUrl,
-        ...(correlationId ? { correlationId } : {})
-      });
+      return rechazarContaminacionPrototipo(req, res, next);
     }
 
     try {

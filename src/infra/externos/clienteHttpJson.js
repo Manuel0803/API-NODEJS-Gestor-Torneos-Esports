@@ -1,7 +1,7 @@
 import { ServicioExternoNoDisponibleError } from '../../dominio/errores/index.js';
 import { obtenerCorrelationId } from '../http/middlewares/contextoCorrelacion.js';
 
-export async function postJson({ fetchFn, url, cuerpo, timeoutMs, servicio }) {
+export async function postJson({ fetchFn, url, cuerpo, timeoutMs, servicio, serviceToken = '' }) {
   const correlationId = obtenerCorrelationId();
   try {
     const respuesta = await fetchFn(url, {
@@ -9,6 +9,7 @@ export async function postJson({ fetchFn, url, cuerpo, timeoutMs, servicio }) {
       headers: {
         'content-type': 'application/json',
         ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
+        ...(serviceToken ? { 'x-service-token': serviceToken } : {}),
       },
       body: JSON.stringify(cuerpo),
       signal: AbortSignal.timeout(timeoutMs),
